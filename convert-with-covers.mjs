@@ -99,6 +99,19 @@ for (let index = 0; index < pages.length; index++) {
   // Pour les covers, traiter les images avec position absolute différemment
   let processedHTML = pageHTML;
 
+  // Corriger les tags cover pour qu'ils fonctionnent avec le CSS du thème
+  // Remplacer <span class="inline-block frontCover"></span> par <div class="frontCover"></div>
+  processedHTML = processedHTML.replace(
+    /<span class="inline-block (frontCover|insideCover|backCover|partCover)"><\/span>/g,
+    '<div class="$1"></div>'
+  );
+
+  // Ajouter des classes supplémentaires sur la page pour les navigateurs qui ne supportent pas :has()
+  if (hasFrontCover) pageClasses += ' has-frontCover';
+  if (hasInsideCover) pageClasses += ' has-insideCover';
+  if (hasBackCover) pageClasses += ' has-backCover';
+  if (hasPartCover) pageClasses += ' has-partCover';
+
   if (isCoverPage) {
     // Détecter et extraire les images avec position absolute
     const imgRegex = /<img[^>]*style="[^"]*position:\s*absolute[^"]*"[^>]*>/g;
@@ -110,25 +123,40 @@ for (let index = 0; index < pages.length; index++) {
       const styleMatch = img.match(/style="([^"]*)"/);
       if (styleMatch) {
         let styles = styleMatch[1];
-        // S'assurer que les valeurs CSS sont correctement formatées
-        styles = styles.replace(/position:absolute/, 'position: absolute');
-        styles = styles.replace(/top:(\d+)/, 'top: $1px');
-        styles = styles.replace(/bottom:(\d+)/, 'bottom: $1px');
-        styles = styles.replace(/left:(\d+)/, 'left: $1px');
-        styles = styles.replace(/right:(\d+)/, 'right: $1px');
-        styles = styles.replace(/width:(\d+)px/, 'width: $1px');
-        styles = styles.replace(/height:(\d+)px/, 'height: $1px');
+
+        // Ne pas toucher aux URLs dans les styles (comme --HB_src)
+        // On traite seulement les propriétés CSS standard
+
+        // S'assurer que position: absolute a un espace
+        styles = styles.replace(/position:\s*absolute/, 'position: absolute');
+
+        // Gérer les valeurs négatives et positives pour top, bottom, left, right
+        // Ajouter px seulement si ce n'est pas déjà présent
+        styles = styles.replace(/\btop:\s*(-?\d+)(?!px|\d|%)/g, 'top: $1px');
+        styles = styles.replace(/\bbottom:\s*(-?\d+)(?!px|\d|%)/g, 'bottom: $1px');
+        styles = styles.replace(/\bleft:\s*(-?\d+)(?!px|\d|%)/g, 'left: $1px');
+        styles = styles.replace(/\bright:\s*(-?\d+)(?!px|\d|%)/g, 'right: $1px');
+
+        // Gérer width et height (toujours positifs)
+        styles = styles.replace(/\bwidth:\s*(\d+)(?!px|\d|%)/g, 'width: $1px');
+        styles = styles.replace(/\bheight:\s*(\d+)(?!px|\d|%)/g, 'height: $1px');
+
+        // Ajouter un z-index positif pour que l'image soit visible (le CSS par défaut met z-index: -1 pour toutes les images)
+        if (!styles.includes('z-index')) {
+          // Ajouter un point-virgule seulement si les styles ne se terminent pas déjà par un
+          if (!styles.endsWith(';')) {
+            styles += ';';
+          }
+          styles += ' z-index: 1';
+        }
 
         const newImg = img.replace(/style="[^"]*"/, `style="${styles}"`);
         processedHTML = processedHTML.replace(img, newImg);
       }
     });
 
-    // Ajouter des classes supplémentaires pour les covers
-    if (hasFrontCover) pageClasses += ' has-front-cover';
-    if (hasInsideCover) pageClasses += ' has-inside-cover';
-    if (hasBackCover) pageClasses += ' has-back-cover';
-    if (hasPartCover) pageClasses += ' has-part-cover';
+    // Pas besoin d'ajouter des classes, le CSS utilise :has()
+    // qui détecte automatiquement la présence des éléments .frontCover, etc.
   }
 
   // Convertir les styles en string CSS
@@ -195,6 +223,7 @@ const fullHTML = `<!DOCTYPE html>
     }
 
     /* Position relative sur .page pour les images absolues */
+    /* IMPORTANT: Ne pas écraser le background-image défini dans le thème ! */
     .page {
       position: relative;
       /* IMPORTANT: Les dimensions doivent correspondre exactement au format Letter US */
@@ -203,7 +232,7 @@ const fullHTML = `<!DOCTYPE html>
       padding: 1.4cm 1.9cm 1.7cm;
       box-sizing: border-box;
       overflow: clip;
-      background-color: var(--HB_Color_Background);
+      /* background-color est déjà défini dans le thème avec background-image */
     }
 
     /* Correction des headers pour correspondre exactement au thème 5ePHB */
@@ -248,84 +277,37 @@ const fullHTML = `<!DOCTYPE html>
       line-height: 0.951em;
     }
 
-    /* Émulation des sélecteurs :has() avec des classes */
-    .page.has-front-cover,
-    .page.has-inside-cover {
-      columns: 1 !important;
-      text-align: center;
-    }
+    /* Fallback pour les navigateurs qui ne supportent pas :has() */
+    /* Les styles principaux sont dans le thème, mais on ajoute des fallbacks */
 
-    .page.has-part-cover {
-      padding-top: 0;
-      text-align: center;
-      columns: 1 !important;
-    }
-
-    .page.has-back-cover {
-      padding: 2.25cm 1.3cm 2cm 1.3cm;
-      line-height: 1.4em;
-      color: #FFFFFF;
-      columns: 1 !important;
-    }
-
-    /* Cacher le footer pour les covers */
-    .page.has-front-cover::after,
-    .page.has-inside-cover::after,
-    .page.has-back-cover::after,
-    .page.has-part-cover::after {
-      display: none !important;
-    }
-
-    /* Position absolue pour les divs de covers */
-    .page.has-front-cover .frontCover,
-    .page.has-inside-cover .insideCover {
+    /* BackCover fallback */
+    .page.has-backCover .backCover {
       position: absolute;
       inset: 0;
       z-index: -1;
+      background-image: url('../build/assets/backCover.png');
+      background-repeat: no-repeat;
+      background-size: contain;
     }
 
-    .page.has-part-cover .partCover {
+    /* PartCover fallback */
+    .page.has-partCover .partCover {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 6cm;
-      z-index: -1;
-    }
-
-    .page.has-back-cover .backCover {
-      position: absolute;
-      inset: 0;
-      z-index: -1;
-    }
-
-    .page.has-back-cover .columnWrapper {
-      width: 7.6cm;
-    }
-
-    /* Images de fond pour les covers - seulement celles qui existent */
-    /* frontCover et insideCover n'ont pas d'images de fond par défaut */
-    .frontCover {
-      /* Pas d'image de fond par défaut - l'utilisateur l'ajoute dans le markdown */
-    }
-
-    .insideCover {
-      /* Pas d'image de fond par défaut - l'utilisateur peut l'ajouter */
-    }
-
-    .partCover {
-      height: 6cm;
       background-image: url('../build/assets/partCoverHeaderPHB.png');
       background-repeat: no-repeat;
       background-size: 100%;
-      background-position: top;
     }
 
-    .backCover {
-      background-image: url('../build/assets/backCover.png');
-      background-repeat: no-repeat;
-      background-size: contain;
-      background-position: center;
+    /* FrontCover et InsideCover positionnement */
+    .page.has-frontCover .frontCover,
+    .page.has-insideCover .insideCover {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
     }
 
     /* Polices locales */
