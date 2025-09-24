@@ -19,6 +19,17 @@ console.log(`✓ Fichier chargé (${(markdown.length / 1024).toFixed(1)} KB)`);
 // Lire les CSS compilés et corriger les chemins des assets
 let bundleCSS = fs.readFileSync('build/bundle.css', 'utf8');
 let themeCSS = fs.readFileSync('build/themes/V3/5ePHB/style.css', 'utf8');
+// Ajouter les styles pour les imageMask depuis Blank theme (pour les masques d'images)
+let blankCSS = fs.readFileSync('build/themes/V3/Blank/style.css', 'utf8');
+
+// Extraire uniquement les styles imageMask du CSS Blank pour éviter les conflits
+// On extrait tout ce qui concerne les imageMask (Center, Edge, Corner)
+const startMask = blankCSS.indexOf('.page [class*=\'imageMask\']');
+const endMask = blankCSS.indexOf('.page dl{', startMask);
+let imageMaskCSS = '';
+if (startMask > -1 && endMask > -1) {
+  imageMaskCSS = blankCSS.substring(startMask, endMask);
+}
 
 // Remplacer les chemins absolus par des chemins relatifs
 // IMPORTANT: préserver le type de quote utilisé
@@ -26,6 +37,10 @@ bundleCSS = bundleCSS.replace(/url\('\/assets\//g, "url('../build/assets/");
 bundleCSS = bundleCSS.replace(/url\("\/assets\//g, 'url("../build/assets/');
 themeCSS = themeCSS.replace(/url\('\/assets\//g, "url('../build/assets/");
 themeCSS = themeCSS.replace(/url\("\/assets\//g, 'url("../build/assets/');
+
+// Corriger aussi les chemins dans les styles imageMask
+imageMaskCSS = imageMaskCSS.replace(/url\('\/assets\//g, "url('../build/assets/");
+imageMaskCSS = imageMaskCSS.replace(/url\("\/assets\//g, 'url("../build/assets/');
 
 bundleCSS = bundleCSS.replace(/url\('\/fonts\//g, "url('../build/fonts/");
 bundleCSS = bundleCSS.replace(/url\("\/fonts\//g, 'url("../build/fonts/');
@@ -185,6 +200,9 @@ const fullHTML = `<!DOCTYPE html>
 
     /* Theme CSS (5ePHB) */
     ${themeCSS}
+
+    /* ImageMask CSS depuis Blank theme pour les masques d'images */
+    ${imageMaskCSS}
 
     /* Reset des marges de page pour l'impression */
     @page {
