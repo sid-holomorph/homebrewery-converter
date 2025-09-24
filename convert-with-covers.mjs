@@ -201,9 +201,25 @@ const fullHTML = `<!DOCTYPE html>
       counter-reset: page-numbers 0;
     }
 
-    /* Fix pour les images sur les front covers */
-    .page:has(.frontCover) img[style*="position: absolute"] {
-      z-index: -2 !important;
+    /* Fix pour les images sur les covers - elles doivent être visibles mais derrière le texte */
+    /* Le sélecteur cherche position avec : ou avec espace après pour gérer les deux cas */
+    .page:has(.frontCover) img[style*="position"],
+    .page:has(.insideCover) img[style*="position"],
+    .page:has(.partCover) img[style*="position"] {
+      z-index: 0 !important;
+    }
+
+    /* Les titres et HR doivent être au-dessus des images */
+    .page:has(.frontCover) h1,
+    .page:has(.frontCover) h2,
+    .page:has(.frontCover) hr,
+    .page:has(.insideCover) h1,
+    .page:has(.insideCover) h2,
+    .page:has(.insideCover) hr,
+    .page:has(.partCover) h1,
+    .page:has(.partCover) h2 {
+      position: relative;
+      z-index: 1;
     }
 
     * {
