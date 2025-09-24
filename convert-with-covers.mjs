@@ -196,6 +196,11 @@ const fullHTML = `<!DOCTYPE html>
       --scaleY: 1;
     }
 
+    /* SOLUTION : Corrige la visibilité des images sur les "inside covers" */
+    .page:has(.insideCover) [class*='imageMask'] {
+      z-index: 0;
+    }
+
     .page [class*='imageMaskCenter'] {
       bottom: calc(var(--offsetY, 0%));
       left: calc(var(--offsetX, 0%));
