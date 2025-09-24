@@ -187,24 +187,20 @@ const fullHTML = `<!DOCTYPE html>
     ${themeCSS}
 
     /* Styles ImageMask pour les masques d'images watercolor */
+    /* Important: on applique le masque uniquement sur l'élément img, pas sur le conteneur */
     .page [class*='imageMask'] {
       position: absolute;
       z-index: -1;
+      --rotation: 0;
+      --scaleX: 1;
+      --scaleY: 1;
     }
 
     .page [class*='imageMaskCenter'] {
-      bottom: calc(var(--offsetY));
-      left: calc(var(--offsetX));
+      bottom: calc(var(--offsetY, 0%));
+      left: calc(var(--offsetX, 0%));
       width: 100%;
       height: 100%;
-      -webkit-mask-image: var(--wc), var(--revealer);
-      mask-image: var(--wc), var(--revealer);
-      -webkit-mask-repeat: no-repeat;
-      mask-repeat: no-repeat;
-      -webkit-mask-position: 50% 50%;
-      mask-position: 50% 50%;
-      -webkit-mask-size: 100% 100%;
-      mask-size: 100% 100%;
       transform: rotate(calc(1deg * var(--rotation))) scaleX(var(--scaleX)) scaleY(var(--scaleY));
     }
 
@@ -221,33 +217,11 @@ const fullHTML = `<!DOCTYPE html>
       position: absolute;
       bottom: 0;
       display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
 
-    /* Définitions des masques watercolor */
-    .page .imageMaskCenter1 { --wc: url('../build/assets/waterColorMasks/center/0001.webp'); }
-    .page .imageMaskCenter2 { --wc: url('../build/assets/waterColorMasks/center/0002.webp'); }
-    .page .imageMaskCenter3 { --wc: url('../build/assets/waterColorMasks/center/0003.webp'); }
-    .page .imageMaskCenter4 { --wc: url('../build/assets/waterColorMasks/center/0004.webp'); }
-    .page .imageMaskCenter5 { --wc: url('../build/assets/waterColorMasks/center/0005.webp'); }
-    .page .imageMaskCenter6 { --wc: url('../build/assets/waterColorMasks/center/0006.webp'); }
-    .page .imageMaskCenter7 { --wc: url('../build/assets/waterColorMasks/center/0007.webp'); }
-    .page .imageMaskCenter8 { --wc: url('../build/assets/waterColorMasks/center/0008.webp'); }
-    .page .imageMaskCenter9 { --wc: url('../build/assets/waterColorMasks/center/0009.webp'); }
-    .page .imageMaskCenter10 { --wc: url('../build/assets/waterColorMasks/center/0010.webp'); }
-    .page .imageMaskCenter11 { --wc: url('../build/assets/waterColorMasks/center/0011.webp'); }
-    .page .imageMaskCenter12 { --wc: url('../build/assets/waterColorMasks/center/0012.webp'); }
-    .page .imageMaskCenter13 { --wc: url('../build/assets/waterColorMasks/center/0013.webp'); }
-    .page .imageMaskCenter14 { --wc: url('../build/assets/waterColorMasks/center/0014.webp'); }
-    .page .imageMaskCenter15 { --wc: url('../build/assets/waterColorMasks/center/0015.webp'); }
-    .page .imageMaskCenter16 { --wc: url('../build/assets/waterColorMasks/center/0016.webp'); }
-
-    /* Variables par défaut pour les masques */
-    .page [class*='imageMask'] {
-      --rotation: 0;
-      --revealer: linear-gradient(transparent, transparent);
-      --scaleX: 1;
-      --scaleY: 1;
-    }
 
     /* Reset des marges de page pour l'impression */
     @page {
