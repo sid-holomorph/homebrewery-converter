@@ -16,11 +16,27 @@ console.log('🔮 Conversion Homebrewery avec gestion des covers...');
 const markdown = fs.readFileSync(inputFile, 'utf8');
 console.log(`✓ Fichier chargé (${(markdown.length / 1024).toFixed(1)} KB)`);
 
-// Lire les CSS compilés
-const bundleCSS = fs.readFileSync('build/bundle.css', 'utf8');
-const themeCSS = fs.readFileSync('build/themes/V3/5ePHB/style.css', 'utf8');
+// Lire les CSS compilés et corriger les chemins des assets
+let bundleCSS = fs.readFileSync('build/bundle.css', 'utf8');
+let themeCSS = fs.readFileSync('build/themes/V3/5ePHB/style.css', 'utf8');
 
-// Diviser en pages
+// Remplacer les chemins absolus par des chemins relatifs
+// IMPORTANT: préserver le type de quote utilisé
+bundleCSS = bundleCSS.replace(/url\('\/assets\//g, "url('../build/assets/");
+bundleCSS = bundleCSS.replace(/url\("\/assets\//g, 'url("../build/assets/');
+themeCSS = themeCSS.replace(/url\('\/assets\//g, "url('../build/assets/");
+themeCSS = themeCSS.replace(/url\("\/assets\//g, 'url("../build/assets/');
+
+bundleCSS = bundleCSS.replace(/url\('\/fonts\//g, "url('../build/fonts/");
+bundleCSS = bundleCSS.replace(/url\("\/fonts\//g, 'url("../build/fonts/');
+themeCSS = themeCSS.replace(/url\('\/fonts\//g, "url('../build/fonts/");
+themeCSS = themeCSS.replace(/url\("\/fonts\//g, 'url("../build/fonts/');
+
+// Corriger aussi les chemins relatifs existants qui sont incorrects
+bundleCSS = bundleCSS.replace(/url\('\.\.\/\.\.\/\.\.\/fonts\//g, "url('../build/fonts/");
+bundleCSS = bundleCSS.replace(/url\('\.\.\/icons\//g, "url('../build/icons/");
+
+// Diviser en pages d'abord
 const PAGEBREAK_REGEX = /^\\page(?:break)?$/m;
 const pages = markdown.split(PAGEBREAK_REGEX);
 
@@ -38,6 +54,10 @@ for (let index = 0; index < pages.length; index++) {
   const hasPartCover = pageContent.includes('{{partCover}}');
 
   const isCoverPage = hasFrontCover || hasInsideCover || hasBackCover || hasPartCover;
+
+  // Traiter les séparateurs ___ en préservant les sauts de ligne pour que le markdown suivant soit traité
+  // Ajouter un double saut de ligne après le hr pour que le markdown continue à fonctionner
+  pageContent = pageContent.replace(/^___$/gm, '\n<hr class="horizontalRule">\n');
 
   // Parser les classes et styles de la page si elle commence par \page avec des tags
   let pageClasses = 'page';
@@ -130,7 +150,7 @@ const fullHTML = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=1000">
   <title>Homebrewery Document</title>
 
   <!-- Google Fonts comme Homebrewery -->
@@ -143,12 +163,24 @@ const fullHTML = `<!DOCTYPE html>
     /* Theme CSS (5ePHB) */
     ${themeCSS}
 
+    /* Reset des marges de page pour l'impression */
+    @page {
+      margin: 0;
+      size: 215.9mm 279.4mm; /* Format Letter US */
+    }
+
     /* Ajustements pour standalone */
     body {
       margin: 0;
       padding: 0;
       overflow: auto;
       background: #EEE5CE;
+      counter-reset: page-numbers 0;
+    }
+
+    * {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
 
     .brewRenderer {
@@ -165,15 +197,24 @@ const fullHTML = `<!DOCTYPE html>
     /* Position relative sur .page pour les images absolues */
     .page {
       position: relative;
+      /* IMPORTANT: Les dimensions doivent correspondre exactement au format Letter US */
+      width: 215.9mm;
+      height: 279.4mm;
       padding: 1.4cm 1.9cm 1.7cm;
       box-sizing: border-box;
+      overflow: clip;
+      background-color: var(--HB_Color_Background);
     }
 
     /* Correction des headers pour correspondre exactement au thème 5ePHB */
+    .page h1, .page h2, .page h3, .page h4, .page h5, .page h6 {
+      font-weight: bold;
+      line-height: 1.2em;
+    }
+
     .page h1, .page h2, .page h3, .page h4 {
       font-family: 'MrEavesRemake';
       color: var(--HB_Color_HeaderText);
-      font-weight: normal;
     }
 
     .page h1 {
@@ -205,7 +246,6 @@ const fullHTML = `<!DOCTYPE html>
       font-family: 'ScalySansCapRemake';
       font-size: 0.423cm;
       line-height: 0.951em;
-      font-weight: normal;
     }
 
     /* Émulation des sélecteurs :has() avec des classes */
@@ -275,14 +315,14 @@ const fullHTML = `<!DOCTYPE html>
 
     .partCover {
       height: 6cm;
-      background-image: url('./build/assets/partCoverHeaderPHB.png');
+      background-image: url('../build/assets/partCoverHeaderPHB.png');
       background-repeat: no-repeat;
       background-size: 100%;
       background-position: top;
     }
 
     .backCover {
-      background-image: url('./build/assets/backCover.png');
+      background-image: url('../build/assets/backCover.png');
       background-repeat: no-repeat;
       background-size: contain;
       background-position: center;
@@ -401,24 +441,131 @@ const fullHTML = `<!DOCTYPE html>
       font-style: normal;
     }
 
+    /* Cacher les hr normaux (comportement par défaut) */
+    .page hr:not(.horizontalRule) {
+      visibility: hidden;
+      margin: 0px;
+    }
+
+    /* Séparateurs horizontaux décoratifs (___) */
+    .page hr.horizontalRule {
+      visibility: visible !important;
+      position: relative;
+      display: block;
+      width: 12cm;
+      height: 0.5cm;
+      margin: 0.5cm auto;
+      background-image: url('../build/assets/horizontalRule.svg');
+      background-size: 100% 100%;
+      background-repeat: no-repeat;
+      border: none;
+    }
+
     @media print {
+      .brewRenderer {
+        padding: 0;
+      }
       .pages {
-        gap: 0;
+        display: block;
       }
       .page {
         margin: 0 !important;
         box-shadow: none !important;
         page-break-after: always;
       }
+      .pdf-export-button {
+        display: none !important;
+      }
+    }
+
+    /* Bouton d'export PDF */
+    .pdf-export-button {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #58180D 0%, #8B2500 100%);
+      color: white;
+      border: 2px solid var(--HB_Color_HeaderUnderline, #C0AD6A);
+      border-radius: 5px;
+      font-family: 'MrEavesRemake', 'BookInsanityRemake', serif;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+      transition: all 0.3s ease;
+    }
+
+    .pdf-export-button:hover {
+      background: linear-gradient(135deg, #8B2500 0%, #58180D 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+    }
+
+    .pdf-export-button:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .pdf-export-button svg {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      margin-right: 8px;
+      vertical-align: middle;
+      fill: currentColor;
     }
   </style>
 </head>
 <body>
+  <button class="pdf-export-button" onclick="exportToPDF()">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M10,17L8,13H10V10H14V13H16L12,17"/>
+    </svg>
+    Exporter en PDF
+  </button>
+
   <div class="brewRenderer">
     <div class="pages">
       ${pagesHTML}
     </div>
   </div>
+
+  <script>
+    function exportToPDF() {
+      // Instructions pour l'utilisateur
+      const message = \`
+Pour exporter en PDF :
+
+1. La fenêtre d'impression va s'ouvrir
+2. Sélectionnez "Enregistrer en PDF" ou "Microsoft Print to PDF"
+3. Paramètres IMPORTANTS :
+   • Format : Letter (8.5" × 11") ou US Letter
+   • Marges : Aucune
+   • Mise à l'échelle : Ajuster à la page (ou 100%)
+   • Arrière-plan graphique : Activé
+4. Cliquez sur Enregistrer
+
+NOTE: Ce document utilise le format Letter US (215.9mm × 279.4mm)
+Si vous préférez A4, utilisez "Ajuster à la page"
+
+Appuyez sur OK pour ouvrir la fenêtre d'impression.
+      \`;
+
+      if (confirm(message)) {
+        window.print();
+      }
+    }
+
+    // Raccourci clavier Ctrl+P ou Cmd+P
+    document.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        exportToPDF();
+      }
+    });
+  </script>
 </body>
 </html>`;
 
