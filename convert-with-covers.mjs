@@ -206,7 +206,7 @@ const fullHTML = `<!DOCTYPE html>
       left: calc(var(--offsetX, 0%));
       width: 100%;
       height: 100%;
-      transform: rotate(calc(1deg * var(--rotation))) scaleX(var(--scaleX)) scaleY(var(--scaleY));
+      transform: rotate(calc(1deg * var(--rotation, 0))) scaleX(var(--scaleX, 1)) scaleY(var(--scaleY, 1));
     }
 
     .page [class*='imageMaskCenter'] > p:has(img) {
@@ -215,16 +215,12 @@ const fullHTML = `<!DOCTYPE html>
       left: 0;
       width: 100%;
       height: 100%;
-      transform: scaleX(calc(1 / var(--scaleX))) scaleY(calc(1 / var(--scaleY))) rotate(calc(-1deg * var(--rotation))) translateX(calc(-1 * var(--offsetX))) translateY(calc(1 * var(--offsetY)));
+      transform: scaleX(calc(1 / var(--scaleX, 1))) scaleY(calc(1 / var(--scaleY, 1))) rotate(calc(-1deg * var(--rotation, 0))) translateX(calc(-1 * var(--offsetX, 0%))) translateY(calc(1 * var(--offsetY, 0%)));
     }
 
     .page [class*='imageMaskCenter'] img {
-      position: absolute;
-      bottom: 0;
+      /* Ne pas forcer les propriétés de position car elles sont définies inline */
       display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
     }
 
 
