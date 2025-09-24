@@ -141,14 +141,9 @@ for (let index = 0; index < pages.length; index++) {
         styles = styles.replace(/\bwidth:\s*(\d+)(?!px|\d|%)/g, 'width: $1px');
         styles = styles.replace(/\bheight:\s*(\d+)(?!px|\d|%)/g, 'height: $1px');
 
-        // Ajouter un z-index positif pour que l'image soit visible (le CSS par défaut met z-index: -1 pour toutes les images)
-        if (!styles.includes('z-index')) {
-          // Ajouter un point-virgule seulement si les styles ne se terminent pas déjà par un
-          if (!styles.endsWith(';')) {
-            styles += ';';
-          }
-          styles += ' z-index: 1';
-        }
+        // Pour les images de fond sur les covers avec position absolute
+        // On les laisse sans z-index spécifique - elles seront stylées par le CSS global
+        // qui les met à z-index: -1, ce qui est voulu pour les images de fond
 
         const newImg = img.replace(/style="[^"]*"/, `style="${styles}"`);
         processedHTML = processedHTML.replace(img, newImg);
@@ -204,6 +199,11 @@ const fullHTML = `<!DOCTYPE html>
       overflow: auto;
       background: #EEE5CE;
       counter-reset: page-numbers 0;
+    }
+
+    /* Fix pour les images sur les front covers */
+    .page:has(.frontCover) img[style*="position: absolute"] {
+      z-index: -2 !important;
     }
 
     * {
