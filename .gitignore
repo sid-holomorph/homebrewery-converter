@@ -1,0 +1,7 @@
+node_modules/
+output/*.html
+!output/test-fonts.html
+.DS_Store
+*.log
+npm-debug.log*
+.env
