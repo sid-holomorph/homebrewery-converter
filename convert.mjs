@@ -521,6 +521,36 @@ const fullHTML = `<!DOCTYPE html>
       font-style: normal;
     }
 
+    /* Support pour les blocs wide */
+    .page .wide,
+    .page .block.wide {
+      column-span: all !important;
+      -webkit-column-span: all !important;
+      -moz-column-span: all !important;
+      display: block;
+      width: 100%;
+      margin-bottom: 1em;
+    }
+
+    .page .wide + *,
+    .page .block.wide + * {
+      margin-top: 0;
+    }
+
+    /* Fix pour les éléments enfants dans wide */
+    .page .block.wide > * {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .page .block.wide table {
+      width: 100%;
+    }
+
+    .page .block.wide .monster.frame {
+      width: calc(100% + .32cm);
+    }
+
     /* Cacher les hr normaux (comportement par défaut) */
     .page hr:not(.horizontalRule) {
       visibility: hidden;
