@@ -536,6 +536,40 @@ const fullHTML = `<!DOCTYPE html>
       margin-bottom: 1em;
     }
 
+    /* Fix pour les numéros de page */
+    .page .pageNumber {
+      position: absolute;
+      right: 2px;
+      bottom: 22px;
+      width: 50px;
+      font-size: .8em;
+      color: var(--HB_Color_Footnotes);
+      text-align: center;
+    }
+
+    .page:nth-child(even) .pageNumber {
+      left: 2px;
+      right: auto;
+    }
+
+    /* Fix pour les footnotes */
+    .page .footnote {
+      position: absolute;
+      right: 80px;
+      bottom: 32px;
+      z-index: 150;
+      width: 200px;
+      font-size: .8em;
+      color: var(--HB_Color_Footnotes);
+      text-align: right;
+    }
+
+    .page:nth-child(even) .footnote {
+      left: 80px;
+      right: auto;
+      text-align: left;
+    }
+
     .page .wide + *,
     .page .block.wide + * {
       margin-top: 0;
