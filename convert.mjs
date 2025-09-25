@@ -150,47 +150,51 @@ for (let index = 0; index < pages.length; index++) {
   if (hasBackCover) pageClasses += ' has-backCover';
   if (hasPartCover) pageClasses += ' has-partCover';
 
-  if (isCoverPage) {
-    // Détecter et extraire les images avec position absolute
-    const imgRegex = /<img[^>]*style="[^"]*position:\s*absolute[^"]*"[^>]*>/g;
-    const absoluteImages = processedHTML.match(imgRegex) || [];
+  // Traiter les images avec position absolute sur toutes les pages (pas seulement les covers)
+  const imgRegex = /<img[^>]*style="[^"]*position:\s*absolute[^"]*"[^>]*>/g;
+  const absoluteImages = processedHTML.match(imgRegex) || [];
 
-    // Les conserver mais s'assurer qu'elles sont bien formatées
-    absoluteImages.forEach(img => {
-      // Parser les styles de l'image
-      const styleMatch = img.match(/style="([^"]*)"/);
-      if (styleMatch) {
-        let styles = styleMatch[1];
+  // Les conserver mais s'assurer qu'elles sont bien formatées
+  absoluteImages.forEach(img => {
+    // Parser les styles de l'image
+    const styleMatch = img.match(/style="([^"]*)"/);
+    if (styleMatch) {
+      let styles = styleMatch[1];
 
-        // Ne pas toucher aux URLs dans les styles (comme --HB_src)
-        // On traite seulement les propriétés CSS standard
+      // Ne pas toucher aux URLs dans les styles (comme --HB_src)
+      // On traite seulement les propriétés CSS standard
 
-        // S'assurer que position: absolute a un espace
-        styles = styles.replace(/position:\s*absolute/, 'position: absolute');
+      // S'assurer que position: absolute a un espace
+      styles = styles.replace(/position:\s*absolute/, 'position: absolute');
 
-        // Gérer les valeurs négatives et positives pour top, bottom, left, right
-        // Ajouter px seulement si ce n'est pas déjà présent
-        styles = styles.replace(/\btop:\s*(-?\d+)(?!px|\d|%)/g, 'top: $1px');
-        styles = styles.replace(/\bbottom:\s*(-?\d+)(?!px|\d|%)/g, 'bottom: $1px');
-        styles = styles.replace(/\bleft:\s*(-?\d+)(?!px|\d|%)/g, 'left: $1px');
-        styles = styles.replace(/\bright:\s*(-?\d+)(?!px|\d|%)/g, 'right: $1px');
+      // Gérer les valeurs négatives et positives pour top, bottom, left, right
+      // Ajouter px seulement si ce n'est pas déjà présent
+      styles = styles.replace(/\btop:\s*(-?\d+)(?!px|\d|%)/g, 'top: $1px');
+      styles = styles.replace(/\bbottom:\s*(-?\d+)(?!px|\d|%)/g, 'bottom: $1px');
+      styles = styles.replace(/\bleft:\s*(-?\d+)(?!px|\d|%)/g, 'left: $1px');
+      styles = styles.replace(/\bright:\s*(-?\d+)(?!px|\d|%)/g, 'right: $1px');
 
-        // Gérer width et height (toujours positifs)
-        styles = styles.replace(/\bwidth:\s*(\d+)(?!px|\d|%)/g, 'width: $1px');
-        styles = styles.replace(/\bheight:\s*(\d+)(?!px|\d|%)/g, 'height: $1px');
+      // Gérer width et height (toujours positifs)
+      styles = styles.replace(/\bwidth:\s*(\d+)(?!px|\d|%)/g, 'width: $1px');
+      styles = styles.replace(/\bheight:\s*(\d+)(?!px|\d|%)/g, 'height: $1px');
 
-        // Pour les images de fond sur les covers avec position absolute
-        // On les laisse sans z-index spécifique - elles seront stylées par le CSS global
-        // qui les met à z-index: -1, ce qui est voulu pour les images de fond
-
-        const newImg = img.replace(/style="[^"]*"/, `style="${styles}"`);
-        processedHTML = processedHTML.replace(img, newImg);
+      // Gestion du z-index selon le type de page
+      if (isCoverPage) {
+        // Les images de fond sur les covers ont z-index: -1 pour être derrière le texte
+        if (!styles.includes('z-index')) {
+          styles = styles.replace(/;\s*$/, '') + '; z-index: -1';
+        }
+      } else {
+        // Sur les pages normales, les images doivent être au-dessus du contenu
+        if (!styles.includes('z-index')) {
+          styles = styles.replace(/;\s*$/, '') + '; z-index: 1';
+        }
       }
-    });
 
-    // Pas besoin d'ajouter des classes, le CSS utilise :has()
-    // qui détecte automatiquement la présence des éléments .frontCover, etc.
-  }
+      const newImg = img.replace(/style="[^"]*"/, `style="${styles}"`);
+      processedHTML = processedHTML.replace(img, newImg);
+    }
+  });
 
   // Convertir les styles en string CSS
   const stylesString = Object.entries(pageStyles)

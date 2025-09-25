@@ -812,7 +812,9 @@ let globalPageNumber = 0;
 const Markdown = {
 	marked : Marked,
 	render : (rawBrewText, pageNumber=0)=>{
-		const lastPageNumber = pageNumber > 0 ? globalVarsList[pageNumber - 1].HB_pageNumber.content : 0;
+		const lastPageNumber = pageNumber > 0 && globalVarsList[pageNumber - 1] && globalVarsList[pageNumber - 1].HB_pageNumber
+			? globalVarsList[pageNumber - 1].HB_pageNumber.content
+			: 0;
 		globalVarsList[pageNumber] = {							//Reset global links for current page, to ensure values are parsed in order
 			'HB_pageNumber' : {									//Add document variables for this page
 				content  : !isNaN(Number(lastPageNumber)) ? Number(lastPageNumber) + 1 : lastPageNumber,
