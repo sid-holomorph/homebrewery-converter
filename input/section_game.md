@@ -999,9 +999,11 @@ De quoi garantir de douces nuits et une paranoïa à toute épreuve pour la suit
 \page
 
 ![homebrew mug](https://i.imgur.com/leuvEXl.png) {position:absolute,top:0px,right:-20px,width:105%,height:100%}
+{{noFooter}}
 
 \page
 
+{{darkLysander}}
 
 ![homebrew mug](https://i.imgur.com/Fx700PM.png) {position:absolute,top:0px,right:0px,width:105%}
 # Défenestration astrale du troubadour en sucre glace
@@ -1055,6 +1057,8 @@ Rompez.
 
 
 \page
+
+{{darkLysander}}
 ![homebrew mug](https://i.imgur.com/Fx700PM.png) {position:absolute,top:0px,right:0px,width:105%}
 
 # Flagellation Expiatoire du couturier autiste
@@ -1083,7 +1087,11 @@ En clair, Silat, t'es pas un homme d'action. T'es une notice de montage Ikea : P
 :
 Rompez.
 
+{{noFooter}}
+
 \page
+
+{{darkLysander}}
 ![homebrew mug](https://i.imgur.com/Fx700PM.png) {position:absolute,top:0px,right:0px,width:105%}
 
 # Exsanguination Rituelle du Démiurge fallacieux
@@ -1124,6 +1132,8 @@ La prochaine fois, MJ, on ne se contentera pas de dévier de ton chemin. On cram
 :
 Rompez.
 \page
+
+{{darkLysander}}
 
 ![homebrew mug](https://i.imgur.com/Fx700PM.png) {position:absolute,top:0px,right:0px,width:105%}
 

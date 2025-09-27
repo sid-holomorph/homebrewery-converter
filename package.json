@@ -2,10 +2,10 @@
   "name": "homebrewery-converter",
   "version": "1.0.0",
   "description": "Standalone Homebrewery Markdown to HTML converter",
-  "main": "convert-homebrewery-complete.mjs",
+  "main": "convert.mjs",
   "type": "module",
   "scripts": {
-    "convert": "node convert-homebrewery-complete.mjs"
+    "convert": "node convert.mjs"
   },
   "dependencies": {
     "@dmsnell/diff-match-patch": "^1.1.0",
