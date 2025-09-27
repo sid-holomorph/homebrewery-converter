@@ -8,6 +8,24 @@ import { waterColorMasks } from './themes/assets/waterColorMasksBase64.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Configuration des images automatiques pour les tags custom
+const CUSTOM_TAG_IMAGES = {
+  darkLysander: {
+    localPath: path.join(__dirname, 'assets', 'custom-tags', 'darkLysander.png'),
+    fallbackUrl: 'https://i.imgur.com/Fx700PM.png',
+    style: 'position:absolute; top:0; left:0; width:100%; height:100%;',
+    alt: 'darkLysander background',
+    mimeType: 'image/png'
+  },
+  lysanderCover: {
+    localPath: path.join(__dirname, 'assets', 'custom-tags', 'lysanderCover.png'),
+    fallbackUrl: 'https://i.imgur.com/leuvEXl.png',
+    style: 'position:absolute; top:0; right:-20px; width:105%; height:100%;',
+    alt: 'lysanderCover background',
+    mimeType: 'image/png'
+  }
+};
+
 // Fonction pour convertir un fichier en base64 avec le bon MIME type
 function fileToBase64(filePath, mimeType) {
   try {
@@ -264,6 +282,7 @@ for (let index = 0; index < pages.length; index++) {
   const hasPartCover = pageContent.includes('{{partCover}}');
   const hasNoFooter = pageContent.includes('{{noFooter}}');
   const hasDarkLysander = pageContent.includes('{{darkLysander}}');
+  const hasLysanderCover = pageContent.includes('{{lysanderCover}}');
   const isCoverPage = hasFrontCover || hasInsideCover || hasBackCover || hasPartCover;
 
   // Traiter les séparateurs
@@ -312,50 +331,34 @@ for (let index = 0; index < pages.length; index++) {
   // Supprimer les tags custom du HTML (ils ont déjà ajouté leurs classes)
   processedHTML = processedHTML.replace(/<span class="inline-block noFooter"><\/span>/g, '');
   processedHTML = processedHTML.replace(/<span class="inline-block darkLysander"><\/span>/g, '');
+  processedHTML = processedHTML.replace(/<span class="inline-block lysanderCover"><\/span>/g, '');
 
-  // Pour darkLysander, extraire les images avec position absolute
+  // Pour darkLysander, ajouter automatiquement l'image de fond
   let darkLysanderImages = '';
   if (hasDarkLysander) {
-    // Extraire toutes les images avec position absolute (avec espaces flexibles)
-    const absImagesArray = [];
-    const imgRegex = /<p>\s*(<img[^>]*position\s*:\s*absolute[^>]*>)\s*<\/p>/gi;
+    // Supprimer toute image manuelle avec position absolute pour éviter les doublons
+    const urlPattern = CUSTOM_TAG_IMAGES.darkLysander.fallbackUrl.split('/').pop().split('.')[0];
+    const imgRegex = new RegExp(`<p>\\s*<img[^>]*(?:${urlPattern}\\.png|position\\s*:\\s*absolute)[^>]*>\\s*</p>`, 'gi');
+    processedHTML = processedHTML.replace(imgRegex, '');
 
-    // Collecter et supprimer les images du HTML
-    processedHTML = processedHTML.replace(imgRegex, (match, img) => {
-      // Modifier l'image pour s'assurer qu'elle couvre toute la page
-      let modifiedImg = img;
+    // Charger l'image depuis le fichier local
+    const config = CUSTOM_TAG_IMAGES.darkLysander;
+    const base64Image = fileToBase64(config.localPath, config.mimeType) || config.fallbackUrl;
+    darkLysanderImages = `<img style="${config.style}" src="${base64Image}" alt="${config.alt}">\n`;
+  }
 
-      // Si l'image n'a pas de height, l'ajouter
-      if (!img.includes('height:')) {
-        modifiedImg = modifiedImg.replace(/style="([^"]*)"/, (m, styles) => {
-          // Nettoyer les point-virgules en trop et ajouter height
-          const cleanStyles = styles.replace(/;\s*$/, '');
-          return `style="${cleanStyles}; height:100%"`;
-        });
-      }
+  // Pour lysanderCover, ajouter automatiquement l'image de couverture
+  let lysanderCoverImages = '';
+  if (hasLysanderCover) {
+    // Supprimer toute image manuelle avec position absolute pour éviter les doublons
+    const urlPattern = CUSTOM_TAG_IMAGES.lysanderCover.fallbackUrl.split('/').pop().split('.')[0];
+    const imgRegex = new RegExp(`<p>\\s*<img[^>]*(?:${urlPattern}\\.png|position\\s*:\\s*absolute)[^>]*>\\s*</p>`, 'gi');
+    processedHTML = processedHTML.replace(imgRegex, '');
 
-      // S'assurer que width est bien défini (normalement déjà présent)
-      if (!img.includes('width:')) {
-        modifiedImg = modifiedImg.replace(/style="([^"]*)"/, (m, styles) => {
-          const cleanStyles = styles.replace(/;\s*$/, '');
-          return `style="${cleanStyles}; width:100%"`;
-        });
-      }
-
-      // Remplacer width:105% par width:100%
-      modifiedImg = modifiedImg.replace(/width:\s*105%/, 'width:100%');
-
-      // Remplacer right:0 par left:0 pour correspondre au CSS
-      modifiedImg = modifiedImg.replace(/right:\s*0px/, 'left:0px');
-
-      absImagesArray.push(modifiedImg);
-      return ''; // Supprimer le paragraphe contenant l'image
-    });
-
-    // Stocker les images pour les placer en dehors du columnWrapper
-    if (absImagesArray.length > 0) {
-      darkLysanderImages = absImagesArray.join('\n') + '\n';
-    }
+    // Charger l'image depuis le fichier local
+    const config = CUSTOM_TAG_IMAGES.lysanderCover;
+    const base64Image = fileToBase64(config.localPath, config.mimeType) || config.fallbackUrl;
+    lysanderCoverImages = `<img style="${config.style}" src="${base64Image}" alt="${config.alt}">\n`;
   }
 
   // Ajouter les classes pour le fallback
@@ -369,10 +372,15 @@ for (let index = 0; index < pages.length; index++) {
     // darkLysander masque automatiquement le footer
     pageClasses += ' has-noFooter';
   }
+  if (hasLysanderCover) {
+    pageClasses += ' lysanderCover';
+    // lysanderCover masque automatiquement le footer
+    pageClasses += ' has-noFooter';
+  }
 
-  // Traiter les images avec position absolute SEULEMENT pour les pages non-darkLysander
-  // (darkLysander a sa propre gestion au-dessus)
-  if (!hasDarkLysander) {
+  // Traiter les images avec position absolute SEULEMENT pour les pages non-darkLysander et non-lysanderCover
+  // (darkLysander et lysanderCover ont leur propre gestion au-dessus)
+  if (!hasDarkLysander && !hasLysanderCover) {
     const imgRegex = /<img[^>]*style="[^"]*position:\s*absolute[^"]*"[^>]*>/g;
     const absoluteImages = processedHTML.match(imgRegex) || [];
 
@@ -412,6 +420,7 @@ for (let index = 0; index < pages.length; index++) {
   pagesHTML += `
     <div class="${pageClasses}" id="p${index + 1}" ${stylesString ? `style="${stylesString}"` : ''}>
       ${hasDarkLysander ? darkLysanderImages : ''}
+      ${hasLysanderCover ? lysanderCoverImages : ''}
       <div class="columnWrapper">
         ${processedHTML}
       </div>
@@ -596,10 +605,40 @@ const fullHTML = `<!DOCTYPE html>
       display: none !important;
     }
 
+    /* Style LysanderCover pour pages de couverture */
+    .page.lysanderCover {
+      position: relative;
+      overflow: clip;
+      width: 215.9mm;
+      height: 279.4mm;
+    }
+
+    /* Supprimer le background parchemin pour lysanderCover */
+    .page.lysanderCover::before {
+      display: none !important;
+    }
+
+    /* Image lysanderCover placée directement dans la page */
+    .page.lysanderCover > img {
+      position: absolute;
+      top: 0;
+      right: -20px;
+      z-index: 0;
+      width: 105%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Contenu au-dessus de l'image lysanderCover */
+    .page.lysanderCover .columnWrapper {
+      position: relative;
+      z-index: 10;
+    }
+
     /* Style DarkLysander pour pages sombres */
     .page.darkLysander {
       position: relative;
-      background: none !important;
+      background: #0a0a0a !important; /* Fond noir de secours */
       overflow: clip;
       width: 215.9mm;
       height: 279.4mm;
