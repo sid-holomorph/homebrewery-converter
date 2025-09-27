@@ -255,8 +255,8 @@ console.log(`✓ ${Object.keys(imagesBase64).length} images chargées`);
 
 // Lire les CSS et les traiter
 console.log('🎨 Traitement des styles...');
-let bundleCSS = fs.readFileSync('build/bundle.css', 'utf8');
-let themeCSS = fs.readFileSync('build/themes/V3/5ePHB/style.css', 'utf8');
+let bundleCSS = fs.readFileSync(path.join(__dirname, 'build/bundle.css'), 'utf8');
+let themeCSS = fs.readFileSync(path.join(__dirname, 'build/themes/V3/5ePHB/style.css'), 'utf8');
 const imageMaskCSS = fs.readFileSync(path.join(__dirname, 'themes/assets/imageMask.css'), 'utf8');
 
 // Embarquer les assets dans les CSS
@@ -487,6 +487,46 @@ const fullHTML = `<!DOCTYPE html>
       padding: 1.4cm 1.9cm 1.7cm;
       box-sizing: border-box;
       overflow: clip;
+    }
+
+    /* columnWrapper pour gérer les colonnes */
+    .columnWrapper {
+      column-gap: inherit;
+      max-height: 100%;
+      min-height: calc(100% + 0.5cm);
+      column-span: all;
+      columns: inherit;
+      column-fill: inherit;
+      column-count: 2;
+      column-fill: auto;
+      column-gap: .9cm;
+      column-width: 8cm;
+      -webkit-column-count: 2;
+      -moz-column-count: 2;
+      -webkit-column-width: 8cm;
+      -moz-column-width: 8cm;
+      -webkit-column-gap: .9cm;
+      -moz-column-gap: .9cm;
+    }
+
+    /* Pages avec une seule colonne */
+    .page:has(.frontCover) .columnWrapper,
+    .page:has(.insideCover) .columnWrapper,
+    .page:has(.backCover) .columnWrapper,
+    .page:has(.partCover) .columnWrapper {
+      column-count: 1;
+      -webkit-column-count: 1;
+      -moz-column-count: 1;
+    }
+
+    /* Fallback pour navigateurs sans :has() */
+    .page.has-frontCover .columnWrapper,
+    .page.has-insideCover .columnWrapper,
+    .page.has-backCover .columnWrapper,
+    .page.has-partCover .columnWrapper {
+      column-count: 1;
+      -webkit-column-count: 1;
+      -moz-column-count: 1;
     }
 
     /* Styles ImageMask */
