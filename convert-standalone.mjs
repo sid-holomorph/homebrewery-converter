@@ -323,10 +323,45 @@ for (let index = 0; index < pages.length; index++) {
   // Traiter les tags cover et images
   let processedHTML = pageHTML;
 
-  processedHTML = processedHTML.replace(
-    /<span class="inline-block (frontCover|insideCover|backCover|partCover)"><\/span>/g,
-    '<div class="$1"></div>'
-  );
+  // Extraire les divs cover pour les placer en dehors du columnWrapper
+  let coverDiv = '';
+  const coverMatch = processedHTML.match(/<span class="inline-block (frontCover|insideCover|backCover|partCover)"><\/span>/);
+  if (coverMatch) {
+    coverDiv = `<div class="${coverMatch[1]}"></div>`;
+    processedHTML = processedHTML.replace(coverMatch[0], '');
+  }
+
+  // Pour backCover, extraire les images avec position absolute pour les placer en dehors du columnWrapper
+  let backCoverImages = '';
+  if (hasBackCover) {
+    const imgRegex = /<p>\s*<img[^>]*style="[^"]*position:\s*absolute[^"]*"[^>]*>\s*<\/p>/g;
+    const matches = processedHTML.match(imgRegex) || [];
+    matches.forEach(imgBlock => {
+      // Extraire juste l'img sans le <p>
+      const imgMatch = imgBlock.match(/<img[^>]*>/);
+      if (imgMatch) {
+        let img = imgMatch[0];
+
+        // Traiter les styles: ajouter z-index: -2 pour que l'image soit derrière la bande noire
+        const styleMatch = img.match(/style="([^"]*)"/);
+        if (styleMatch) {
+          let styles = styleMatch[1];
+
+          // Normaliser et ajouter z-index
+          if (styles.includes('z-index')) {
+            styles = styles.replace(/z-index\s*:\s*[^;]+/g, 'z-index: -2');
+          } else {
+            styles = styles.replace(/;\s*$/, '') + '; z-index: -2';
+          }
+
+          img = img.replace(/style="[^"]*"/, `style="${styles}"`);
+        }
+
+        backCoverImages += img + '\n';
+        processedHTML = processedHTML.replace(imgBlock, '');
+      }
+    });
+  }
 
   // Supprimer les tags custom du HTML (ils ont déjà ajouté leurs classes)
   processedHTML = processedHTML.replace(/<span class="inline-block noFooter"><\/span>/g, '');
@@ -378,9 +413,9 @@ for (let index = 0; index < pages.length; index++) {
     pageClasses += ' has-noFooter';
   }
 
-  // Traiter les images avec position absolute SEULEMENT pour les pages non-darkLysander et non-lysanderCover
-  // (darkLysander et lysanderCover ont leur propre gestion au-dessus)
-  if (!hasDarkLysander && !hasLysanderCover) {
+  // Traiter les images avec position absolute SEULEMENT pour les pages non-darkLysander, non-lysanderCover, et non-backCover
+  // (darkLysander, lysanderCover et backCover ont leur propre gestion au-dessus)
+  if (!hasDarkLysander && !hasLysanderCover && !hasBackCover) {
     const imgRegex = /<img[^>]*style="[^"]*position:\s*absolute[^"]*"[^>]*>/g;
     const absoluteImages = processedHTML.match(imgRegex) || [];
 
@@ -398,8 +433,14 @@ for (let index = 0; index < pages.length; index++) {
         styles = styles.replace(/\bheight:\s*(\d+)(?!px|\d|%)/g, 'height: $1px');
 
         if (isCoverPage) {
-          if (!styles.includes('z-index')) {
-            styles = styles.replace(/;\s*$/, '') + '; z-index: -1';
+          // Pour backCover, l'image doit TOUJOURS être à z-index: -2 (derrière la bande noire qui est à -1)
+          const zIndex = hasBackCover ? '-2' : '-1';
+          if (styles.includes('z-index')) {
+            // Remplacer le z-index existant
+            styles = styles.replace(/z-index\s*:\s*[^;]+/g, `z-index: ${zIndex}`);
+          } else {
+            // Ajouter le z-index
+            styles = styles.replace(/;\s*$/, '') + `; z-index: ${zIndex}`;
           }
         } else {
           if (!styles.includes('z-index')) {
@@ -419,8 +460,10 @@ for (let index = 0; index < pages.length; index++) {
 
   pagesHTML += `
     <div class="${pageClasses}" id="p${index + 1}" ${stylesString ? `style="${stylesString}"` : ''}>
+      ${coverDiv}
       ${hasDarkLysander ? darkLysanderImages : ''}
       ${hasLysanderCover ? lysanderCoverImages : ''}
+      ${hasBackCover ? backCoverImages : ''}
       <div class="columnWrapper">
         ${processedHTML}
       </div>
@@ -605,7 +648,61 @@ const fullHTML = `<!DOCTYPE html>
       line-height: 0.951em;
     }
 
+    /* BackCover styling - comme Homebrewery officiel */
+    .page:has(.backCover) {
+      padding: 2.25cm 1.3cm 2cm 1.3cm;
+      line-height: 1.4em;
+      color: #FFFFFF;
+      columns: 1;
+      /* Retirer le fond parchemin sur la backCover */
+      background-image: none !important;
+      background-color: transparent;
+      position: relative;
+    }
+
+    .page:has(.backCover)::after {
+      display: none;
+    }
+
+    .page:has(.backCover) .columnWrapper {
+      width: 7.6cm;
+      position: relative;
+    }
+
+    .page:has(.backCover) .backCover {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background-image: url('${imagesBase64['backCover.png'] || ''}');
+      background-repeat: no-repeat;
+      background-size: contain;
+    }
+
+    .page:has(.backCover) img[style*="position"] {
+      z-index: -2 !important;
+    }
+
     /* Fallbacks pour navigateurs sans :has() */
+    .page.has-backCover {
+      padding: 2.25cm 1.3cm 2cm 1.3cm;
+      line-height: 1.4em;
+      color: #FFFFFF;
+      columns: 1;
+      /* Retirer le fond parchemin sur la backCover */
+      background-image: none !important;
+      background-color: transparent;
+      position: relative;
+    }
+
+    .page.has-backCover::after {
+      display: none;
+    }
+
+    .page.has-backCover .columnWrapper {
+      width: 7.6cm;
+      position: relative;
+    }
+
     .page.has-backCover .backCover {
       position: absolute;
       inset: 0;
@@ -613,6 +710,10 @@ const fullHTML = `<!DOCTYPE html>
       background-image: url('${imagesBase64['backCover.png'] || ''}');
       background-repeat: no-repeat;
       background-size: contain;
+    }
+
+    .page.has-backCover img[style*="position"] {
+      z-index: -2 !important;
     }
 
     .page.has-partCover .partCover {

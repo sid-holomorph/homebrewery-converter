@@ -382,14 +382,53 @@ const fullHTML = `<!DOCTYPE html>
     /* Fallback pour les navigateurs qui ne supportent pas :has() */
     /* Les styles principaux sont dans le thème, mais on ajoute des fallbacks */
 
-    /* BackCover fallback */
+    /* BackCover styling amélioré */
+    .page.has-backCover {
+      padding: 2.25cm 1.3cm 2cm 1.3cm;
+      line-height: 1.4em;
+      color: #FFFFFF;
+      columns: 1;
+      position: relative;
+      /* Image de fond parchemin */
+      background-image: url('../build/assets/parchmentBackground.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    .page.has-backCover::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7); /* Overlay sombre pour améliorer la lisibilité */
+      z-index: 1;
+      pointer-events: none;
+    }
+
     .page.has-backCover .backCover {
       position: absolute;
       inset: 0;
-      z-index: -1;
+      z-index: 2;
       background-image: url('../build/assets/backCover.png');
       background-repeat: no-repeat;
-      background-size: contain;
+      background-size: cover;
+      background-position: center;
+      pointer-events: none;
+    }
+
+    .page.has-backCover .columnWrapper {
+      width: 7.6cm;
+      position: relative;
+      z-index: 3;
+    }
+
+    .page.has-backCover img[style*="position"] {
+      position: absolute !important;
+      top: 0px;
+      z-index: 1;
+      height: 100%;
+      width: auto;
+      object-fit: cover;
     }
 
     /* PartCover fallback */
