@@ -236,8 +236,8 @@ function embedAssetsInCSS(css, imagesBase64, fontsAlreadyEmbedded = false) {
 }
 
 // Déterminer le fichier d'entrée
-const inputFile = path.join(__dirname, 'input', 'section_game.md');
-const outputFile = path.join(__dirname, 'output', 'section_game_standalone.html');
+const inputFile = path.join(__dirname, 'input', 'section_game_v2.md');
+const outputFile = path.join(__dirname, 'output', 'section_game_v2_standalone.html');
 
 console.log('🔮 Conversion Homebrewery STANDALONE (tout en base64)...');
 
