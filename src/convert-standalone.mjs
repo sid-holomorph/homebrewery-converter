@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import https from 'https';
+import http from 'http';
 import Markdown from '../shared/naturalcrit/markdown.js';
 import { waterColorMasks } from '../assets/themes/assets/waterColorMasksBase64.js';
 
@@ -9,262 +10,331 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.join(__dirname, '..');
 
+// Configuration
+const inputFile = path.join(rootDir, 'input', 'section_game.md');
+const outputDir = path.join(rootDir, 'output', 'section_game');
+const outputFile = path.join(outputDir, 'index.html');
+
 // Configuration des images automatiques pour les tags custom
 const CUSTOM_TAG_IMAGES = {
   darkLysander: {
     localPath: path.join(rootDir, 'assets', 'custom-tags', 'darkLysander.png'),
     fallbackUrl: 'https://i.imgur.com/Fx700PM.png',
+    outputPath: 'images/darkLysander.png',
     style: 'position:absolute; top:0; left:0; width:100%; height:100%;',
-    alt: 'darkLysander background',
-    mimeType: 'image/png'
+    alt: 'darkLysander background'
   },
   lysanderCover: {
     localPath: path.join(rootDir, 'assets', 'custom-tags', 'lysanderCover.png'),
     fallbackUrl: 'https://i.imgur.com/leuvEXl.png',
+    outputPath: 'images/lysanderCover.png',
     style: 'position:absolute; top:0; right:-20px; width:105%; height:100%;',
-    alt: 'lysanderCover background',
-    mimeType: 'image/png'
+    alt: 'lysanderCover background'
   }
 };
 
-// Fonction pour convertir un fichier en base64 avec le bon MIME type
-function fileToBase64(filePath, mimeType) {
+// Fonction pour copier un fichier
+function copyFile(src, dest) {
   try {
-    const buffer = fs.readFileSync(filePath);
-    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(src, dest);
+    return true;
   } catch (error) {
-    console.warn(`⚠️ Impossible de charger ${filePath}: ${error.message}`);
-    return null;
+    console.warn(`⚠️ Erreur lors de la copie de ${src}: ${error.message}`);
+    return false;
   }
 }
 
-// Fonction pour télécharger une image depuis une URL et la convertir en base64
-async function urlToBase64(url) {
+// Fonction pour télécharger une image depuis une URL
+async function downloadImage(url, outputPath) {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
-    const protocol = urlObj.protocol === 'https:' ? https : require('http');
+    const protocol = urlObj.protocol === 'https:' ? https : http;
+
+    const fullOutputPath = path.join(outputDir, outputPath);
+    fs.mkdirSync(path.dirname(fullOutputPath), { recursive: true });
 
     protocol.get(url, (response) => {
+      if (response.statusCode === 302 || response.statusCode === 301) {
+        // Redirection
+        downloadImage(response.headers.location, outputPath).then(resolve).catch(reject);
+        return;
+      }
+
       const chunks = [];
       response.on('data', (chunk) => chunks.push(chunk));
       response.on('end', () => {
         const buffer = Buffer.concat(chunks);
-        const mimeType = response.headers['content-type'] || 'image/png';
-        const base64 = `data:${mimeType};base64,${buffer.toString('base64')}`;
-        resolve(base64);
+        fs.writeFileSync(fullOutputPath, buffer);
+        resolve(outputPath);
       });
     }).on('error', (error) => {
-      console.warn(`⚠️ Impossible de télécharger ${url}: ${error.message}`);
-      resolve(url); // En cas d'erreur, garder l'URL originale
+      console.warn(`⚠️ Erreur téléchargement ${url}: ${error.message}`);
+      resolve(null);
     });
   });
 }
 
-// Fonction pour remplacer toutes les images externes par leur version base64
-async function embedExternalImages(html) {
-  const imgRegex = /<img[^>]*src="(https?:\/\/[^"]+)"[^>]*>/g;
-  const matches = [...html.matchAll(imgRegex)];
+// Extraire les waterColorMasks en fichiers PNG depuis base64
+function extractWaterColorMasks() {
+  const masksDir = path.join(outputDir, 'waterColorMasks');
+  fs.mkdirSync(masksDir, { recursive: true });
 
-  if (matches.length > 0) {
-    console.log(`📥 Téléchargement de ${matches.length} image(s) externe(s)...`);
+  let count = 0;
+
+  // Edge masks
+  for (const [key, dataUrl] of Object.entries(waterColorMasks.edge)) {
+    const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    fs.writeFileSync(path.join(masksDir, `edge_${key}.png`), buffer);
+    count++;
   }
 
-  for (const match of matches) {
-    const [fullMatch, url] = match;
-    const base64 = await urlToBase64(url);
-    html = html.replace(url, base64);
-
-    // Remplacer aussi dans --HB_src si présent
-    html = html.replace(`--HB_src:url(${url})`, `--HB_src:url('${base64}')`);
+  // Center masks
+  for (const [key, dataUrl] of Object.entries(waterColorMasks.center)) {
+    const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    fs.writeFileSync(path.join(masksDir, `center_${key}.png`), buffer);
+    count++;
   }
 
-  return html;
+  // Corner masks
+  for (const [key, dataUrl] of Object.entries(waterColorMasks.corner)) {
+    const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    fs.writeFileSync(path.join(masksDir, `corner_${key}.png`), buffer);
+    count++;
+  }
+
+  return count;
 }
 
-// Generate CSS variables for masks
+// Générer les variables CSS pour les masks avec chemins relatifs
 function generateMaskVariables() {
-    let css = ':root {\n';
+  let css = ':root {\n';
 
-    // Edge masks
-    for (let i = 1; i <= 8; i++) {
-        const maskData = waterColorMasks.edge[`000${i}`];
-        if (maskData) {
-            css += `  --mask-edge-${i}: url('${maskData}');\n`;
-        }
+  // Edge masks
+  for (let i = 1; i <= 8; i++) {
+    const key = `000${i}`;
+    if (waterColorMasks.edge[key]) {
+      css += `  --mask-edge-${i}: url('waterColorMasks/edge_${key}.png');\n`;
     }
+  }
 
-    // Center masks
-    for (let i = 1; i <= 16; i++) {
-        const numStr = i.toString().padStart(4, '0');
-        const maskData = waterColorMasks.center[numStr];
-        if (maskData) {
-            css += `  --mask-center-${i}: url('${maskData}');\n`;
-        }
+  // Center masks
+  for (let i = 1; i <= 16; i++) {
+    const key = i.toString().padStart(4, '0');
+    if (waterColorMasks.center[key]) {
+      css += `  --mask-center-${i}: url('waterColorMasks/center_${key}.png');\n`;
     }
+  }
 
-    // Corner masks
-    for (let i = 1; i <= 37; i++) {
-        const numStr = i.toString().padStart(4, '0');
-        const maskData = waterColorMasks.corner[numStr];
-        if (maskData) {
-            css += `  --mask-corner-${i}: url('${maskData}');\n`;
-        }
+  // Corner masks
+  for (let i = 1; i <= 37; i++) {
+    const key = i.toString().padStart(4, '0');
+    if (waterColorMasks.corner[key]) {
+      css += `  --mask-corner-${i}: url('waterColorMasks/corner_${key}.png');\n`;
     }
+  }
 
-    css += '}\n';
-    return css;
+  css += '}\n';
+  return css;
 }
 
-// Charger et convertir toutes les polices en base64
-function loadFontsAsBase64() {
-  const fontsDir = path.join(rootDir, 'assets/fonts/5e');
+// Copier les polices
+function copyFonts() {
+  const fontsSourceDir = path.join(rootDir, 'assets/fonts/5e');
+  const fontsDestDir = path.join(outputDir, 'fonts');
+  fs.mkdirSync(fontsDestDir, { recursive: true });
+
+  const fonts = [
+    'Bookinsanity.woff2',
+    'Bookinsanity Bold.woff2',
+    'Bookinsanity Italic.woff2',
+    'Bookinsanity Bold Italic.woff2',
+    'Scaly Sans.woff2',
+    'Scaly Sans Bold.woff2',
+    'Scaly Sans Italic.woff2',
+    'Scaly Sans Bold Italic.woff2',
+    'Scaly Sans Caps.woff2',
+    'Mr Eaves Small Caps.woff2',
+    'Solbera Imitation Tweak.woff2',
+    'Nodesto Caps Condensed.woff2',
+    'Nodesto Caps Condensed Bold.woff2',
+    'Nodesto Caps Wide.woff2',
+    'Overpass Medium.woff2',
+    'WalterTurncoat-Regular.woff2'
+  ];
+
+  let count = 0;
+  for (const font of fonts) {
+    const src = path.join(fontsSourceDir, font);
+    const dest = path.join(fontsDestDir, font);
+    if (copyFile(src, dest)) count++;
+  }
+
+  return count;
+}
+
+// Générer le CSS @font-face avec chemins relatifs
+function generateFontFaces() {
   const fonts = {
-    'Bookinsanity.woff2': 'BookInsanityRemake',
-    'Bookinsanity Bold.woff2': 'BookInsanityRemake',
-    'Bookinsanity Italic.woff2': 'BookInsanityRemake',
-    'Bookinsanity Bold Italic.woff2': 'BookInsanityRemake',
-    'Scaly Sans.woff2': 'ScalySansRemake',
-    'Scaly Sans Bold.woff2': 'ScalySansRemake',
-    'Scaly Sans Italic.woff2': 'ScalySansRemake',
-    'Scaly Sans Bold Italic.woff2': 'ScalySansRemake',
-    'Scaly Sans Caps.woff2': 'ScalySansCapRemake',
-    'Mr Eaves Small Caps.woff2': 'MrEavesRemake',
-    'Solbera Imitation Tweak.woff2': 'SolberaImitationRemake',
-    'Nodesto Caps Condensed.woff2': 'NodestoCapsCondensed',
-    'Nodesto Caps Condensed Bold.woff2': 'NodestoCapsCondensed',
-    'Nodesto Caps Wide.woff2': 'NodestoCapsWide',
-    'Overpass Medium.woff2': 'Overpass',
-    'WalterTurncoat-Regular.woff2': 'WalterTurncoat'
+    'Bookinsanity.woff2': { family: 'BookInsanityRemake', weight: 'normal', style: 'normal' },
+    'Bookinsanity Bold.woff2': { family: 'BookInsanityRemake', weight: 'bold', style: 'normal' },
+    'Bookinsanity Italic.woff2': { family: 'BookInsanityRemake', weight: 'normal', style: 'italic' },
+    'Bookinsanity Bold Italic.woff2': { family: 'BookInsanityRemake', weight: 'bold', style: 'italic' },
+    'Scaly Sans.woff2': { family: 'ScalySansRemake', weight: 'normal', style: 'normal' },
+    'Scaly Sans Bold.woff2': { family: 'ScalySansRemake', weight: 'bold', style: 'normal' },
+    'Scaly Sans Italic.woff2': { family: 'ScalySansRemake', weight: 'normal', style: 'italic' },
+    'Scaly Sans Bold Italic.woff2': { family: 'ScalySansRemake', weight: 'bold', style: 'italic' },
+    'Scaly Sans Caps.woff2': { family: 'ScalySansCapRemake', weight: 'normal', style: 'normal' },
+    'Mr Eaves Small Caps.woff2': { family: 'MrEavesRemake', weight: 'normal', style: 'normal' },
+    'Solbera Imitation Tweak.woff2': { family: 'SolberaImitationRemake', weight: 'normal', style: 'normal' },
+    'Nodesto Caps Condensed.woff2': { family: 'NodestoCapsCondensed', weight: 'normal', style: 'normal' },
+    'Nodesto Caps Condensed Bold.woff2': { family: 'NodestoCapsCondensed', weight: 'bold', style: 'normal' },
+    'Nodesto Caps Wide.woff2': { family: 'NodestoCapsWide', weight: 'normal', style: 'normal' },
+    'Overpass Medium.woff2': { family: 'Overpass', weight: 'normal', style: 'normal' },
+    'WalterTurncoat-Regular.woff2': { family: 'WalterTurncoat', weight: 'normal', style: 'normal' }
   };
 
-  let fontCSS = '';
-
-  for (const [filename, fontFamily] of Object.entries(fonts)) {
-    const fontPath = path.join(fontsDir, filename);
-    const base64Font = fileToBase64(fontPath, 'font/woff2');
-
-    if (base64Font) {
-      // Déterminer le weight et le style depuis le nom du fichier
-      let fontWeight = 'normal';
-      let fontStyle = 'normal';
-
-      if (filename.includes('Bold')) fontWeight = 'bold';
-      if (filename.includes('Italic')) fontStyle = 'italic';
-
-      fontCSS += `
+  let css = '';
+  for (const [filename, props] of Object.entries(fonts)) {
+    css += `
     @font-face {
-      font-family: '${fontFamily}';
-      src: url('${base64Font}') format('woff2');
-      font-weight: ${fontWeight};
-      font-style: ${fontStyle};
+      font-family: '${props.family}';
+      src: url('fonts/${filename}') format('woff2');
+      font-weight: ${props.weight};
+      font-style: ${props.style};
     }`;
+  }
+
+  return css;
+}
+
+// Copier les images principales
+function copyImages() {
+  const imagesSourceDir = path.join(rootDir, 'assets/images');
+  const imagesDestDir = path.join(outputDir, 'images');
+  fs.mkdirSync(imagesDestDir, { recursive: true });
+
+  const images = [
+    'parchmentBackground.jpg',
+    'parchmentBackgroundGrayscale.jpg',
+    'backCover.png',
+    'partCoverHeaderPHB.png',
+    'PHB_footerAccent.png',
+    'DMG_footerAccent.png',
+    'horizontalRule.svg',
+    'noteBorder.png',
+    'descriptiveBorder.png',
+    'monsterBorderFancy.png',
+    'frameBorder.png',
+    'classTableDecoration.png',
+    'codeBorder.png',
+    'redTriangle.png',
+    'coverPageBanner.svg',
+    'scriptBorder.png'
+  ];
+
+  let count = 0;
+  for (const image of images) {
+    const src = path.join(imagesSourceDir, image);
+    const dest = path.join(imagesDestDir, image);
+    if (copyFile(src, dest)) count++;
+  }
+
+  // Copier aussi les images custom tags
+  for (const tag of Object.values(CUSTOM_TAG_IMAGES)) {
+    const dest = path.join(outputDir, tag.outputPath);
+    if (fs.existsSync(tag.localPath)) {
+      if (copyFile(tag.localPath, dest)) count++;
     }
   }
 
-  return fontCSS;
+  return count;
 }
 
-// Charger et convertir les images principales en base64
-function loadImagesAsBase64() {
-  const assetsDir = path.join(rootDir, 'assets/images');
-  const images = {
-    'parchmentBackground.jpg': 'image/jpeg',
-    'parchmentBackgroundGrayscale.jpg': 'image/jpeg',
-    'backCover.png': 'image/png',
-    'partCoverHeaderPHB.png': 'image/png',
-    'PHB_footerAccent.png': 'image/png',
-    'DMG_footerAccent.png': 'image/png',
-    'horizontalRule.svg': 'image/svg+xml',
-    'noteBorder.png': 'image/png',
-    'descriptiveBorder.png': 'image/png',
-    'monsterBorderFancy.png': 'image/png',
-    'frameBorder.png': 'image/png',
-    'classTableDecoration.png': 'image/png',
-    'codeBorder.png': 'image/png',
-    'redTriangle.png': 'image/png',
-    'coverPageBanner.svg': 'image/svg+xml',
-    'scriptBorder.png': 'image/png'
-  };
-
-  const imagesBase64 = {};
-
-  for (const [filename, mimeType] of Object.entries(images)) {
-    const imagePath = path.join(assetsDir, filename);
-    const base64Image = fileToBase64(imagePath, mimeType);
-    if (base64Image) {
-      imagesBase64[filename] = base64Image;
-    }
-  }
-
-  return imagesBase64;
-}
-
-// Remplacer les URLs dans le CSS par les versions base64
-function embedAssetsInCSS(css, imagesBase64, fontsAlreadyEmbedded = false) {
+// Remplacer les URLs dans le CSS par des chemins relatifs
+function fixCSSPaths(css) {
   let processedCSS = css;
 
-  // Remplacer les références aux images
-  for (const [filename, base64Data] of Object.entries(imagesBase64)) {
-    // Patterns pour trouver les références aux images
-    // Gestion spéciale pour parchmentBackground.jpg qui pourrait être référencé comme parchment.jpg
-    const baseFilename = filename.replace('Background', '');
-    const patterns = [
-      new RegExp(`url\\(['"]?\\.\\./build/assets/${filename}['"]?\\)`, 'g'),
-      new RegExp(`url\\(['"]?/assets/${filename}['"]?\\)`, 'g'),
-      new RegExp(`url\\(['"]?assets/${filename}['"]?\\)`, 'g'),
-      new RegExp(`url\\(['"]?\\.\\./assets/${filename}['"]?\\)`, 'g'),
-      // Patterns additionnels pour les noms simplifiés
-      new RegExp(`url\\(['"]?\\.\\./build/assets/${baseFilename}['"]?\\)`, 'g'),
-      new RegExp(`url\\(['"]?/assets/${baseFilename}['"]?\\)`, 'g'),
-      new RegExp(`url\\(['"]?assets/${baseFilename}['"]?\\)`, 'g'),
-      new RegExp(`url\\(['"]?\\.\\./assets/${baseFilename}['"]?\\)`, 'g')
-    ];
+  // Remplacer les chemins absolus par des chemins relatifs
+  processedCSS = processedCSS.replace(/url\(['"]?\/assets\/([^'"]+)['"]?\)/g, "url('images/$1')");
+  processedCSS = processedCSS.replace(/url\(['"]?\.\.\/build\/assets\/([^'"]+)['"]?\)/g, "url('images/$1')");
+  processedCSS = processedCSS.replace(/url\(['"]?assets\/([^'"]+)['"]?\)/g, "url('images/$1')");
+  processedCSS = processedCSS.replace(/url\(['"]?\.\.\/assets\/([^'"]+)['"]?\)/g, "url('images/$1')");
 
-    patterns.forEach(pattern => {
-      processedCSS = processedCSS.replace(pattern, `url('${base64Data}')`);
-    });
-  }
-
-  // Si les polices ne sont pas déjà embarquées, supprimer les références aux polices externes
-  if (!fontsAlreadyEmbedded) {
-    // Supprimer les références aux polices (elles seront dans une section séparée)
-    processedCSS = processedCSS.replace(/url\(['"]?\.\.\/build\/fonts\/[^)]+['"]?\)/g, 'url("")');
-    processedCSS = processedCSS.replace(/url\(['"]?\/fonts\/[^)]+['"]?\)/g, 'url("")');
-    processedCSS = processedCSS.replace(/url\(['"]?fonts\/[^)]+['"]?\)/g, 'url("")');
-  }
+  // Remplacer les chemins de fonts
+  processedCSS = processedCSS.replace(/url\(['"]?\/fonts\/([^'"]+)['"]?\)/g, "url('fonts/$1')");
+  processedCSS = processedCSS.replace(/url\(['"]?\.\.\/build\/fonts\/([^'"]+)['"]?\)/g, "url('fonts/$1')");
+  processedCSS = processedCSS.replace(/url\(['"]?\.\.\/\.\.\/\.\.\/fonts\/([^'"]+)['"]?\)/g, "url('fonts/$1')");
 
   return processedCSS;
 }
 
-// Déterminer le fichier d'entrée
-const inputFile = path.join(rootDir, 'input', 'section_game.md');
-const outputFile = path.join(rootDir, 'output', 'section_game_standalone.html');
+// Télécharger toutes les images externes du HTML
+async function downloadExternalImages(html) {
+  const imgRegex = /<img[^>]*src="(https?:\/\/[^"]+)"[^>]*>/g;
+  const matches = [...html.matchAll(imgRegex)];
 
-console.log('🔮 Conversion Homebrewery STANDALONE (tout en base64)...');
+  if (matches.length === 0) return html;
+
+  console.log(`📥 Téléchargement de ${matches.length} image(s) externe(s)...`);
+
+  let processedHTML = html;
+  let downloadedCount = 0;
+
+  for (const match of matches) {
+    const [fullMatch, url] = match;
+
+    // Générer un nom de fichier depuis l'URL
+    const urlObj = new URL(url);
+    const filename = path.basename(urlObj.pathname) || `external_${downloadedCount}.png`;
+    const outputPath = `images/${filename}`;
+
+    const result = await downloadImage(url, outputPath);
+    if (result) {
+      processedHTML = processedHTML.replace(url, outputPath);
+      // Remplacer aussi dans --HB_src si présent
+      processedHTML = processedHTML.replace(`--HB_src:url(${url})`, `--HB_src:url('${outputPath}')`);
+      downloadedCount++;
+    }
+  }
+
+  console.log(`✓ ${downloadedCount} image(s) téléchargée(s)`);
+  return processedHTML;
+}
+
+console.log('🔮 Conversion Homebrewery avec ressources externalisées...');
+
+// Créer la structure de dossiers
+fs.mkdirSync(outputDir, { recursive: true });
 
 // Lire le markdown
 const markdown = fs.readFileSync(inputFile, 'utf8');
 console.log(`✓ Fichier chargé (${(markdown.length / 1024).toFixed(1)} KB)`);
 
-// Charger toutes les ressources en base64
-console.log('📦 Chargement des ressources...');
-const fontsBase64CSS = loadFontsAsBase64();
-console.log(`✓ ${fontsBase64CSS.split('@font-face').length - 1} polices chargées`);
+// Copier toutes les ressources
+console.log('📦 Copie des ressources...');
+const fontsCount = copyFonts();
+console.log(`✓ ${fontsCount} polices copiées`);
 
-const imagesBase64 = loadImagesAsBase64();
-console.log(`✓ ${Object.keys(imagesBase64).length} images chargées`);
+const imagesCount = copyImages();
+console.log(`✓ ${imagesCount} images copiées`);
 
-// Lire les CSS et les traiter
+const masksCount = extractWaterColorMasks();
+console.log(`✓ ${masksCount} waterColorMasks extraits`);
+
+// Charger et traiter les CSS
 console.log('🎨 Traitement des styles...');
 let bundleCSS = fs.readFileSync(path.join(rootDir, 'assets/css/bundle.css'), 'utf8');
 let themeCSS = fs.readFileSync(path.join(rootDir, 'assets/css/themes/V3/5ePHB/style.css'), 'utf8');
 const imageMaskCSS = fs.readFileSync(path.join(rootDir, 'assets/themes/assets/imageMask.css'), 'utf8');
 
-// Embarquer les assets dans les CSS
-bundleCSS = embedAssetsInCSS(bundleCSS, imagesBase64);
-themeCSS = embedAssetsInCSS(themeCSS, imagesBase64);
+bundleCSS = fixCSSPaths(bundleCSS);
+themeCSS = fixCSSPaths(themeCSS);
 
-console.log('✓ Styles traités et assets embarqués');
+console.log('✓ Styles traités');
 
 // Diviser en pages
 const PAGEBREAK_REGEX = /^\\page(?:break)?$/m;
@@ -332,39 +402,42 @@ for (let index = 0; index < pages.length; index++) {
     processedHTML = processedHTML.replace(coverMatch[0], '');
   }
 
+  // Extraire TOUS les imageMask (watercolor masks) pour les placer en dehors du columnWrapper
+  // Ceci est CRITIQUE car les imageMask doivent être positionnés par rapport à .page, pas .columnWrapper
+  let imageMaskBlocks = '';
+  const imageMaskRegex = /<div class="block imageMask[^"]*"[^>]*>[\s\S]*?<\/div>/g;
+  const imageMaskMatches = processedHTML.match(imageMaskRegex) || [];
+  imageMaskMatches.forEach(block => {
+    imageMaskBlocks += block + '\n';
+    processedHTML = processedHTML.replace(block, '');
+  });
+
   // Pour backCover, extraire les images avec position absolute pour les placer en dehors du columnWrapper
   let backCoverImages = '';
   if (hasBackCover) {
     const imgRegex = /<p>\s*<img[^>]*style="[^"]*position:\s*absolute[^"]*"[^>]*>\s*<\/p>/g;
     const matches = processedHTML.match(imgRegex) || [];
     matches.forEach(imgBlock => {
-      // Extraire juste l'img sans le <p>
       const imgMatch = imgBlock.match(/<img[^>]*>/);
       if (imgMatch) {
         let img = imgMatch[0];
-
-        // Traiter les styles: ajouter z-index: -2 pour que l'image soit derrière la bande noire
         const styleMatch = img.match(/style="([^"]*)"/);
         if (styleMatch) {
           let styles = styleMatch[1];
-
-          // Normaliser et ajouter z-index
           if (styles.includes('z-index')) {
             styles = styles.replace(/z-index\s*:\s*[^;]+/g, 'z-index: -2');
           } else {
             styles = styles.replace(/;\s*$/, '') + '; z-index: -2';
           }
-
           img = img.replace(/style="[^"]*"/, `style="${styles}"`);
         }
-
         backCoverImages += img + '\n';
         processedHTML = processedHTML.replace(imgBlock, '');
       }
     });
   }
 
-  // Supprimer les tags custom du HTML (ils ont déjà ajouté leurs classes)
+  // Supprimer les tags custom du HTML
   processedHTML = processedHTML.replace(/<span class="inline-block noFooter"><\/span>/g, '');
   processedHTML = processedHTML.replace(/<span class="inline-block darkLysander"><\/span>/g, '');
   processedHTML = processedHTML.replace(/<span class="inline-block lysanderCover"><\/span>/g, '');
@@ -372,29 +445,15 @@ for (let index = 0; index < pages.length; index++) {
   // Pour darkLysander, ajouter automatiquement l'image de fond
   let darkLysanderImages = '';
   if (hasDarkLysander) {
-    // Supprimer toute image manuelle avec position absolute pour éviter les doublons
-    const urlPattern = CUSTOM_TAG_IMAGES.darkLysander.fallbackUrl.split('/').pop().split('.')[0];
-    const imgRegex = new RegExp(`<p>\\s*<img[^>]*(?:${urlPattern}\\.png|position\\s*:\\s*absolute)[^>]*>\\s*</p>`, 'gi');
-    processedHTML = processedHTML.replace(imgRegex, '');
-
-    // Charger l'image depuis le fichier local
     const config = CUSTOM_TAG_IMAGES.darkLysander;
-    const base64Image = fileToBase64(config.localPath, config.mimeType) || config.fallbackUrl;
-    darkLysanderImages = `<img style="${config.style}" src="${base64Image}" alt="${config.alt}">\n`;
+    darkLysanderImages = `<img style="${config.style}" src="${config.outputPath}" alt="${config.alt}">\n`;
   }
 
   // Pour lysanderCover, ajouter automatiquement l'image de couverture
   let lysanderCoverImages = '';
   if (hasLysanderCover) {
-    // Supprimer toute image manuelle avec position absolute pour éviter les doublons
-    const urlPattern = CUSTOM_TAG_IMAGES.lysanderCover.fallbackUrl.split('/').pop().split('.')[0];
-    const imgRegex = new RegExp(`<p>\\s*<img[^>]*(?:${urlPattern}\\.png|position\\s*:\\s*absolute)[^>]*>\\s*</p>`, 'gi');
-    processedHTML = processedHTML.replace(imgRegex, '');
-
-    // Charger l'image depuis le fichier local
     const config = CUSTOM_TAG_IMAGES.lysanderCover;
-    const base64Image = fileToBase64(config.localPath, config.mimeType) || config.fallbackUrl;
-    lysanderCoverImages = `<img style="${config.style}" src="${base64Image}" alt="${config.alt}">\n`;
+    lysanderCoverImages = `<img style="${config.style}" src="${config.outputPath}" alt="${config.alt}">\n`;
   }
 
   // Ajouter les classes pour le fallback
@@ -404,18 +463,13 @@ for (let index = 0; index < pages.length; index++) {
   if (hasPartCover) pageClasses += ' has-partCover';
   if (hasNoFooter) pageClasses += ' has-noFooter';
   if (hasDarkLysander) {
-    pageClasses += ' darkLysander';
-    // darkLysander masque automatiquement le footer
-    pageClasses += ' has-noFooter';
+    pageClasses += ' darkLysander has-noFooter';
   }
   if (hasLysanderCover) {
-    pageClasses += ' lysanderCover';
-    // lysanderCover masque automatiquement le footer
-    pageClasses += ' has-noFooter';
+    pageClasses += ' lysanderCover has-noFooter';
   }
 
-  // Traiter les images avec position absolute SEULEMENT pour les pages non-darkLysander, non-lysanderCover, et non-backCover
-  // (darkLysander, lysanderCover et backCover ont leur propre gestion au-dessus)
+  // Traiter les images avec position absolute
   if (!hasDarkLysander && !hasLysanderCover && !hasBackCover) {
     const imgRegex = /<img[^>]*style="[^"]*position:\s*absolute[^"]*"[^>]*>/g;
     const absoluteImages = processedHTML.match(imgRegex) || [];
@@ -424,7 +478,6 @@ for (let index = 0; index < pages.length; index++) {
       const styleMatch = img.match(/style="([^"]*)"/);
       if (styleMatch) {
         let styles = styleMatch[1];
-
         styles = styles.replace(/position:\s*absolute/, 'position: absolute');
         styles = styles.replace(/\btop:\s*(-?\d+)(?!px|\d|%)/g, 'top: $1px');
         styles = styles.replace(/\bbottom:\s*(-?\d+)(?!px|\d|%)/g, 'bottom: $1px');
@@ -434,13 +487,10 @@ for (let index = 0; index < pages.length; index++) {
         styles = styles.replace(/\bheight:\s*(\d+)(?!px|\d|%)/g, 'height: $1px');
 
         if (isCoverPage) {
-          // Pour backCover, l'image doit TOUJOURS être à z-index: -2 (derrière la bande noire qui est à -1)
           const zIndex = hasBackCover ? '-2' : '-1';
           if (styles.includes('z-index')) {
-            // Remplacer le z-index existant
             styles = styles.replace(/z-index\s*:\s*[^;]+/g, `z-index: ${zIndex}`);
           } else {
-            // Ajouter le z-index
             styles = styles.replace(/;\s*$/, '') + `; z-index: ${zIndex}`;
           }
         } else {
@@ -465,6 +515,7 @@ for (let index = 0; index < pages.length; index++) {
       ${hasDarkLysander ? darkLysanderImages : ''}
       ${hasLysanderCover ? lysanderCoverImages : ''}
       ${hasBackCover ? backCoverImages : ''}
+      ${imageMaskBlocks}
       <div class="columnWrapper">
         ${processedHTML}
       </div>
@@ -472,7 +523,7 @@ for (let index = 0; index < pages.length; index++) {
   `;
 }
 
-// HTML complet STANDALONE
+// HTML complet
 const fullHTML = `<!DOCTYPE html>
 <html>
 <head>
@@ -487,19 +538,19 @@ const fullHTML = `<!DOCTYPE html>
     /* Mask Variables */
     ${generateMaskVariables()}
 
-    /* Fonts embarquées en base64 */
-    ${fontsBase64CSS}
+    /* Fonts */
+    ${generateFontFaces()}
 
-    /* Bundle CSS avec assets embarqués */
+    /* Bundle CSS */
     ${bundleCSS}
 
-    /* Theme CSS avec assets embarqués */
+    /* Theme CSS */
     ${themeCSS}
 
     /* ImageMask CSS */
     ${imageMaskCSS}
 
-    /* Styles additionnels pour le standalone */
+    /* Styles additionnels */
     body {
       margin: 0;
       padding: 0;
@@ -533,7 +584,6 @@ const fullHTML = `<!DOCTYPE html>
       overflow: clip;
     }
 
-    /* columnWrapper pour gérer les colonnes */
     .columnWrapper {
       column-gap: inherit;
       max-height: 100%;
@@ -553,7 +603,6 @@ const fullHTML = `<!DOCTYPE html>
       -moz-column-gap: .9cm;
     }
 
-    /* Pages avec une seule colonne */
     .page:has(.frontCover) .columnWrapper,
     .page:has(.insideCover) .columnWrapper,
     .page:has(.backCover) .columnWrapper,
@@ -563,7 +612,6 @@ const fullHTML = `<!DOCTYPE html>
       -moz-column-count: 1;
     }
 
-    /* Fallback pour navigateurs sans :has() */
     .page.has-frontCover .columnWrapper,
     .page.has-insideCover .columnWrapper,
     .page.has-backCover .columnWrapper,
@@ -573,7 +621,6 @@ const fullHTML = `<!DOCTYPE html>
       -moz-column-count: 1;
     }
 
-    /* Styles ImageMask */
     .page [class*='imageMask'] {
       position: absolute;
       z-index: -1;
@@ -607,7 +654,6 @@ const fullHTML = `<!DOCTYPE html>
       display: block;
     }
 
-    /* Headers */
     .page h1, .page h2, .page h3, .page h4, .page h5, .page h6 {
       font-weight: bold;
       line-height: 1.2em;
@@ -649,13 +695,11 @@ const fullHTML = `<!DOCTYPE html>
       line-height: 0.951em;
     }
 
-    /* BackCover styling - comme Homebrewery officiel */
     .page:has(.backCover) {
       padding: 2.25cm 1.3cm 2cm 1.3cm;
       line-height: 1.4em;
       color: #FFFFFF;
       columns: 1;
-      /* Retirer le fond parchemin sur la backCover */
       background-image: none !important;
       background-color: transparent;
       position: relative;
@@ -674,7 +718,7 @@ const fullHTML = `<!DOCTYPE html>
       position: absolute;
       inset: 0;
       z-index: -1;
-      background-image: url('${imagesBase64['backCover.png'] || ''}');
+      background-image: url('images/backCover.png');
       background-repeat: no-repeat;
       background-size: contain;
     }
@@ -683,13 +727,11 @@ const fullHTML = `<!DOCTYPE html>
       z-index: -2 !important;
     }
 
-    /* Fallbacks pour navigateurs sans :has() */
     .page.has-backCover {
       padding: 2.25cm 1.3cm 2cm 1.3cm;
       line-height: 1.4em;
       color: #FFFFFF;
       columns: 1;
-      /* Retirer le fond parchemin sur la backCover */
       background-image: none !important;
       background-color: transparent;
       position: relative;
@@ -708,7 +750,7 @@ const fullHTML = `<!DOCTYPE html>
       position: absolute;
       inset: 0;
       z-index: -1;
-      background-image: url('${imagesBase64['backCover.png'] || ''}');
+      background-image: url('images/backCover.png');
       background-repeat: no-repeat;
       background-size: contain;
     }
@@ -723,7 +765,7 @@ const fullHTML = `<!DOCTYPE html>
       left: 0;
       width: 100%;
       height: 6cm;
-      background-image: url('${imagesBase64['partCoverHeaderPHB.png'] || ''}');
+      background-image: url('images/partCoverHeaderPHB.png');
       background-repeat: no-repeat;
       background-size: 100%;
     }
@@ -735,19 +777,16 @@ const fullHTML = `<!DOCTYPE html>
       z-index: -1;
     }
 
-    /* Images sur covers */
     .page:has(.frontCover) img[style*="position"],
     .page:has(.insideCover) img[style*="position"],
     .page:has(.partCover) img[style*="position"] {
       z-index: 0 !important;
     }
 
-    /* Masquer le pied de page sur les pages avec noFooter */
     .page.has-noFooter::after {
       display: none !important;
     }
 
-    /* Style LysanderCover pour pages de couverture */
     .page.lysanderCover {
       position: relative;
       overflow: clip;
@@ -755,12 +794,10 @@ const fullHTML = `<!DOCTYPE html>
       height: 279.4mm;
     }
 
-    /* Supprimer le background parchemin pour lysanderCover */
     .page.lysanderCover::before {
       display: none !important;
     }
 
-    /* Image lysanderCover placée directement dans la page */
     .page.lysanderCover > img {
       position: absolute;
       top: 0;
@@ -771,22 +808,19 @@ const fullHTML = `<!DOCTYPE html>
       object-fit: cover;
     }
 
-    /* Contenu au-dessus de l'image lysanderCover */
     .page.lysanderCover .columnWrapper {
       position: relative;
       z-index: 10;
     }
 
-    /* Style DarkLysander pour pages sombres */
     .page.darkLysander {
       position: relative;
-      background: #0a0a0a !important; /* Fond noir de secours */
+      background: #0a0a0a !important;
       overflow: clip;
       width: 215.9mm;
       height: 279.4mm;
     }
 
-    /* Supprimer le background parchemin pour darkLysander */
     .page.darkLysander::before {
       display: none !important;
     }
@@ -797,13 +831,11 @@ const fullHTML = `<!DOCTYPE html>
       font-size: 1.02em;
     }
 
-    /* Assurer que tout le contenu texte est VRAIMENT au-dessus */
     .page.darkLysander .columnWrapper {
       position: relative;
       z-index: 100 !important;
     }
 
-    /* Images darkLysander placées directement dans la page (en dehors de columnWrapper) */
     .page.darkLysander > img {
       position: absolute;
       top: 0;
@@ -815,7 +847,7 @@ const fullHTML = `<!DOCTYPE html>
     }
 
     .page.darkLysander h1 {
-      color: #6B0F1A;  /* Rouge sang de Strahd */
+      color: #6B0F1A;
       line-height: 1.10;
       font-size: 2.3em;
       width: calc(100% + 60px);
@@ -856,7 +888,6 @@ const fullHTML = `<!DOCTYPE html>
       color: #D8D0CD;
     }
 
-    /* S'assurer que les paragraphes et listes sont au-dessus */
     .page.darkLysander p,
     .page.darkLysander ul,
     .page.darkLysander ol,
@@ -870,13 +901,11 @@ const fullHTML = `<!DOCTYPE html>
       z-index: 150 !important;
     }
 
-    /* Forcer le contenu des colonnes au-dessus des images */
     .page.darkLysander .columnWrapper > * {
       position: relative;
       z-index: 150 !important;
     }
 
-    /* Exception : les paragraphes contenant des images restent neutres */
     .page.darkLysander p:has(img) {
       z-index: auto !important;
       position: static !important;
@@ -894,7 +923,6 @@ const fullHTML = `<!DOCTYPE html>
       z-index: 1;
     }
 
-    /* Wide blocks */
     .page .wide,
     .page .block.wide {
       column-span: all !important;
@@ -905,7 +933,6 @@ const fullHTML = `<!DOCTYPE html>
       margin-bottom: 1em;
     }
 
-    /* Numéros de page */
     .page .pageNumber {
       position: absolute;
       right: 2px;
@@ -921,7 +948,6 @@ const fullHTML = `<!DOCTYPE html>
       right: auto;
     }
 
-    /* Footnotes */
     .page .footnote {
       position: absolute;
       right: 80px;
@@ -939,7 +965,6 @@ const fullHTML = `<!DOCTYPE html>
       text-align: left;
     }
 
-    /* Horizontal rules */
     .page hr:not(.horizontalRule) {
       visibility: hidden;
       margin: 0px;
@@ -952,13 +977,12 @@ const fullHTML = `<!DOCTYPE html>
       width: 12cm;
       height: 0.5cm;
       margin: 0.5cm auto;
-      background-image: url('${imagesBase64['horizontalRule.svg'] || ''}');
+      background-image: url('images/horizontalRule.svg');
       background-size: 100% 100%;
       background-repeat: no-repeat;
       border: none;
     }
 
-    /* Print styles */
     @media print {
       .brewRenderer {
         padding: 0;
@@ -981,7 +1005,6 @@ const fullHTML = `<!DOCTYPE html>
       size: 215.9mm 279.4mm;
     }
 
-    /* Bouton export PDF */
     .pdf-export-button {
       position: fixed;
       top: 20px;
@@ -1049,8 +1072,6 @@ Pour exporter en PDF :
    • Arrière-plan graphique : Activé
 4. Cliquez sur Enregistrer
 
-NOTE: Document 100% autonome - toutes les ressources sont embarquées
-
 Appuyez sur OK pour ouvrir la fenêtre d'impression.
       \`;
 
@@ -1071,19 +1092,35 @@ Appuyez sur OK pour ouvrir la fenêtre d'impression.
 
 // Fonction principale asynchrone
 async function main() {
-  // Embarquer toutes les images externes en base64
-  const finalHTML = await embedExternalImages(fullHTML);
+  // Télécharger les images externes
+  const finalHTML = await downloadExternalImages(fullHTML);
 
-  // Écrire le fichier
-  fs.mkdirSync(path.dirname(outputFile), { recursive: true });
+  // Écrire le fichier HTML
   fs.writeFileSync(outputFile, finalHTML);
 
-  const outputSizeMB = (finalHTML.length / 1024 / 1024).toFixed(2);
-  console.log(`✅ Conversion STANDALONE terminée !`);
+  const outputSizeKB = (finalHTML.length / 1024).toFixed(1);
+  console.log(`✅ Conversion terminée !`);
   console.log(`📄 Fichier créé : ${outputFile}`);
-  console.log(`📏 Taille : ${outputSizeMB} MB (100% autonome)`);
-  console.log(`✨ Toutes les ressources embarquées en base64`);
-  console.log(`🎯 Aucune dépendance externe requise !`);
+  console.log(`📏 Taille HTML : ${outputSizeKB} KB`);
+  console.log(`📁 Ressources dans : ${outputDir}`);
+
+  // Calculer la taille totale du dossier
+  let totalSize = 0;
+  const calcSize = (dir) => {
+    const files = fs.readdirSync(dir);
+    files.forEach(file => {
+      const filePath = path.join(dir, file);
+      const stats = fs.statSync(filePath);
+      if (stats.isDirectory()) {
+        calcSize(filePath);
+      } else {
+        totalSize += stats.size;
+      }
+    });
+  };
+  calcSize(outputDir);
+
+  console.log(`📦 Taille totale : ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
 }
 
 // Lancer la conversion

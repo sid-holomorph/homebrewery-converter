@@ -83,20 +83,19 @@ homebrewery-converter/
 
 ### Utilisation
 ```bash
-# Conversion standalone (tout en base64)
+# Conversion (ressources copiées vers output/[nom]/)
 node src/convert-standalone.mjs
-
-# Conversion avec liens relatifs
-node src/convert.mjs input/fichier.md output/fichier.html
 ```
 
-Le script convertit `input/section_game.md` en `output/section_game_standalone.html` avec :
-- Toutes les polices D&D 5e intégrées en base64
-- Toutes les images embarquées (parchemin, décorations, etc.)
+Le script convertit `input/section_game.md` en `output/section_game/` avec :
+- HTML ultra-léger (~455 KB au lieu de 99 MB avec base64)
+- Toutes les polices D&D 5e copiées dans fonts/5e/ (16 polices)
+- Toutes les images copiées dans images/ (16 images de base + images externes)
+- 63 waterColorMasks copiés dans images/waterColorMasks/ (edge/center/corner)
 - Les styles CSS de Homebrewery (bundle.css + theme V3 5ePHB)
 - Support complet de la syntaxe Markdown étendue
-- Images externes automatiquement téléchargées et converties en base64
-- Document 100% autonome (aucune dépendance externe)
+- Images externes automatiquement téléchargées et sauvegardées (27 images)
+- Document 100% portable (dossier autonome de 19 MB avec toutes ressources)
 
 ### Fonctionnalités
 - **Conversion Markdown → HTML** avec le parser officiel Homebrewery
