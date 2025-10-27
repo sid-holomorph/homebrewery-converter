@@ -65,22 +65,32 @@ Convertisseur MD vers HTML utilisant la codebase de Homebrewery pour :
 ### Structure du projet
 ```
 homebrewery-converter/
-├── input/              # Fichiers Markdown sources
-│   └── section_game_v2.md
-├── output/             # Fichiers HTML générés
-│   └── section_game_v2_standalone.html
-├── build/              # Assets compilés (CSS, fonts, images)
-├── shared/             # Code partagé (parser Markdown)
-├── themes/             # Thèmes et styles
-└── convert-standalone.mjs  # Script de conversion principal
+├── src/                       # Scripts de conversion
+│   ├── convert-standalone.mjs # Conversion avec ressources base64 embarquées
+│   └── convert.mjs            # Conversion avec liens relatifs vers ressources
+├── assets/                    # TOUTES les ressources
+│   ├── css/                   # Styles compilés (bundle.css, themes)
+│   ├── fonts/                 # Polices D&D 5e (woff2)
+│   ├── images/                # Images et décorations (PNG, JPG, SVG)
+│   ├── themes/                # Thèmes Homebrewery
+│   └── custom-tags/           # Images custom Lysander
+├── shared/                    # Code partagé (parser Markdown)
+├── input/                     # Fichiers Markdown sources
+│   └── section_game.md
+└── output/                    # Fichiers HTML générés uniquement
+    └── section_game_standalone.html
 ```
 
 ### Utilisation
 ```bash
-node convert-standalone.mjs
+# Conversion standalone (tout en base64)
+node src/convert-standalone.mjs
+
+# Conversion avec liens relatifs
+node src/convert.mjs input/fichier.md output/fichier.html
 ```
 
-Le script convertit `input/section_game_v2.md` en `output/section_game_v2_standalone.html` avec :
+Le script convertit `input/section_game.md` en `output/section_game_standalone.html` avec :
 - Toutes les polices D&D 5e intégrées en base64
 - Toutes les images embarquées (parchemin, décorations, etc.)
 - Les styles CSS de Homebrewery (bundle.css + theme V3 5ePHB)
