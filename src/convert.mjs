@@ -9,10 +9,58 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.join(__dirname, '..');
 
-// Configuration
-const inputFile = path.join(rootDir, 'input', 'section_game.md');
-const outputDir = path.join(rootDir, 'output', 'section_game');
-const outputFile = path.join(outputDir, 'index.html');
+// Afficher l'aide si demandée
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`
+🔮 Convertisseur Homebrewery Markdown vers HTML
+
+Usage:
+  node src/convert.mjs [chemin-vers-fichier.md]
+
+Options:
+  --help, -h    Afficher ce message d'aide
+
+Exemples:
+  node src/convert.mjs                          # Utilise input/section_game.md (défaut)
+  node src/convert.mjs input/mon-document.md    # Convertit mon-document.md
+  node src/convert.mjs ../autre-fichier.md      # Chemin relatif
+  node src/convert.mjs C:/docs/document.md      # Chemin absolu
+
+Le fichier HTML sera généré dans output/[nom-du-fichier]/index.html
+  `);
+  process.exit(0);
+}
+
+// Configuration - accepte un chemin en paramètre
+const inputFileArg = process.argv[2];
+let inputFile, outputDir, outputFile;
+
+if (inputFileArg) {
+  // Utiliser le fichier spécifié en paramètre
+  inputFile = path.resolve(inputFileArg);
+
+  // Vérifier que le fichier existe
+  if (!fs.existsSync(inputFile)) {
+    console.error(`❌ Erreur: Le fichier "${inputFile}" n'existe pas.`);
+    process.exit(1);
+  }
+
+  // Vérifier que c'est un fichier .md
+  if (!inputFile.endsWith('.md')) {
+    console.error(`❌ Erreur: Le fichier doit avoir l'extension .md`);
+    process.exit(1);
+  }
+
+  // Créer le dossier de sortie basé sur le nom du fichier
+  const baseName = path.basename(inputFile, '.md');
+  outputDir = path.join(rootDir, 'output', baseName);
+  outputFile = path.join(outputDir, 'index.html');
+} else {
+  // Comportement par défaut
+  inputFile = path.join(rootDir, 'input', 'section_game.md');
+  outputDir = path.join(rootDir, 'output', 'section_game');
+  outputFile = path.join(outputDir, 'index.html');
+}
 
 // Configuration des images automatiques pour les tags custom
 const CUSTOM_TAG_IMAGES = {
@@ -303,6 +351,8 @@ async function downloadExternalImages(html) {
 }
 
 console.log('🔮 Conversion Homebrewery avec ressources externalisées...');
+console.log(`📄 Fichier source : ${inputFile}`);
+console.log(`📁 Dossier sortie : ${outputDir}`);
 
 // Créer la structure de dossiers
 fs.mkdirSync(outputDir, { recursive: true });
