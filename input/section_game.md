@@ -884,6 +884,9 @@ La conversation dérive naturellement vers les obligations sociales, créant ce 
 
 #### L'Interlude : #BeauPère
 La pause repas nous offre un aparté inattendu sur les drames familiaux bien réels des joueurs, prouvant que les monstres les plus effrayants ne sont pas toujours en Barovie.
+
+\column
+
 {{note
 **Silat** : *« Attendez, attendez, j'ouvre une parenthèse Lysander, on va commencer un arc. »* 
 :
