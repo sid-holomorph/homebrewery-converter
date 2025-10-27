@@ -980,25 +980,104 @@ const fullHTML = `<!DOCTYPE html>
     }
 
     @media print {
+      /* Remove padding for print */
       .brewRenderer {
         padding: 0;
       }
+
+      /* Display pages as block for proper pagination */
       .pages {
         display: block;
       }
+
+      /* Page break rules */
       .page {
         margin: 0 !important;
         box-shadow: none !important;
         page-break-after: always;
+        break-after: page;
+        overflow: hidden !important;
       }
+
+      /* Fix column wrapper overflow issues in PDF */
+      .columnWrapper {
+        column-fill: auto !important;
+        -webkit-column-fill: auto !important;
+        -moz-column-fill: auto !important;
+        min-height: 0 !important;
+        max-height: 24.5cm !important;
+        height: 24.5cm !important;
+        overflow: hidden !important;
+      }
+
+      /* Prevent content from breaking across pages */
+      .page p,
+      .page table,
+      .page blockquote,
+      .page .note,
+      .page .descriptive,
+      .page .classTable,
+      .page .monsterBlock {
+        page-break-inside: avoid;
+        break-inside: avoid-page;
+      }
+
+      /* Adjust page numbers and footnotes position for print */
+      .page .pageNumber {
+        position: absolute;
+        bottom: 22px;
+      }
+
+      .page .footnote {
+        position: absolute;
+        bottom: 35px !important;
+      }
+
+      .page:nth-child(even) .footnote {
+        bottom: 35px !important;
+      }
+
+      /* Ensure watercolor masks render in PDF */
+      .page [class*='imageMask'] {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color-adjust: exact;
+      }
+
+      /* Preserve all colors and backgrounds in print */
+      .page,
+      .page *,
+      .page::before,
+      .page::after {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+
+      /* Hide export button */
       .pdf-export-button {
         display: none !important;
       }
+
+      /* Control orphans and widows */
+      .page p {
+        orphans: 2;
+        widows: 2;
+      }
+
+      /* Hide empty pages - pages with minimal content */
+      .page:empty {
+        display: none !important;
+        page-break-after: avoid !important;
+      }
     }
 
+    /* Page setup for PDF */
     @page {
       margin: 0;
       size: 215.9mm 279.4mm;
+      orphans: 3;
+      widows: 3;
     }
 
     .pdf-export-button {
