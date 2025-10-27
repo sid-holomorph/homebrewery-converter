@@ -755,6 +755,45 @@ const fullHTML = `<!DOCTYPE html>
       z-index: -2 !important;
     }
 
+    /* Custom backCover styles */
+    .page:has(.backCover) hr {
+      visibility: visible !important;
+      width: 170px !important;
+      height: 0.53cm;
+      margin-top: 1.1cm;
+      margin-right: auto;
+      margin-left: auto;
+      background-image: url('images/horizontalRule.svg');
+      background-size: 100% 100%;
+      border: none;
+    }
+
+    .page:has(.backCover) p {
+      font-family: 'Overpass';
+      font-size: 0.332cm;
+      line-height: 0.35cm;
+      font-style: italic !important;
+    }
+
+    .page.has-backCover hr {
+      visibility: visible !important;
+      width: 170px !important;
+      height: 0.53cm;
+      margin-top: 1.1cm;
+      margin-right: auto;
+      margin-left: auto;
+      background-image: url('images/horizontalRule.svg');
+      background-size: 100% 100%;
+      border: none;
+    }
+
+    .page.has-backCover p {
+      font-family: 'Overpass';
+      font-size: 0.332cm;
+      line-height: 0.35cm;
+      font-style: italic !important;
+    }
+
     .page.has-partCover .partCover {
       position: absolute;
       top: 0;
