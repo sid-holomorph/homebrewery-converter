@@ -642,6 +642,14 @@ const fullHTML = `<!DOCTYPE html>
       z-index: 0;
     }
 
+    /* Column break for \column command */
+    .columnSplit {
+      visibility: hidden;
+      -webkit-column-break-after: always;
+      break-after: column;
+      -moz-column-break-after: always;
+    }
+
     .page h1, .page h2, .page h3, .page h4, .page h5, .page h6 {
       font-weight: bold;
       line-height: 1.2em;
