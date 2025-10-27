@@ -1,6 +1,5 @@
 node_modules/
-output/*.html
-!output/test-fonts.html
+output/
 .DS_Store
 *.log
 npm-debug.log*
