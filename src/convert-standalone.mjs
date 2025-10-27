@@ -4,7 +4,6 @@ import { fileURLToPath } from 'url';
 import https from 'https';
 import http from 'http';
 import Markdown from '../shared/naturalcrit/markdown.js';
-import { waterColorMasks } from '../assets/themes/assets/waterColorMasksBase64.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,67 +74,61 @@ async function downloadImage(url, outputPath) {
   });
 }
 
-// Extraire les waterColorMasks en fichiers PNG depuis base64
-function extractWaterColorMasks() {
-  const masksDir = path.join(outputDir, 'waterColorMasks');
-  fs.mkdirSync(masksDir, { recursive: true });
+// Détecter les masques utilisés dans le HTML
+function detectUsedMasks(html) {
+  const usedMasks = new Set();
 
-  let count = 0;
+  // Patterns pour détecter les classes imageMask AVEC numéro uniquement
+  const patterns = [
+    /imageMaskCenter(\d+)/g,
+    /imageMaskEdge(\d+)/g,
+    /imageMaskCorner(\d+)/g
+  ];
 
-  // Edge masks
-  for (const [key, dataUrl] of Object.entries(waterColorMasks.edge)) {
-    const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-    fs.writeFileSync(path.join(masksDir, `edge_${key}.png`), buffer);
-    count++;
-  }
+  patterns.forEach(pattern => {
+    let match;
+    while ((match = pattern.exec(html)) !== null) {
+      if (match[1]) {
+        const type = pattern.source.includes('Center') ? 'center' :
+                    pattern.source.includes('Edge') ? 'edge' : 'corner';
+        usedMasks.add(`${type}/${match[1]}`);
+      }
+    }
+  });
 
-  // Center masks
-  for (const [key, dataUrl] of Object.entries(waterColorMasks.center)) {
-    const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-    fs.writeFileSync(path.join(masksDir, `center_${key}.png`), buffer);
-    count++;
-  }
-
-  // Corner masks
-  for (const [key, dataUrl] of Object.entries(waterColorMasks.corner)) {
-    const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-    fs.writeFileSync(path.join(masksDir, `corner_${key}.png`), buffer);
-    count++;
-  }
-
-  return count;
+  return usedMasks;
 }
 
-// Générer les variables CSS pour les masks avec chemins relatifs
-function generateMaskVariables() {
+// Convertir les masques utilisés en base64
+function getMasksAsBase64(usedMasks) {
+  const masksSourceDir = path.join(rootDir, 'themes/assets/waterColorMasks');
+  const masksBase64 = {};
+
+  usedMasks.forEach(maskId => {
+    const [type, num] = maskId.split('/');
+    const filename = `${num.padStart(4, '0')}.webp`;
+    const maskPath = path.join(masksSourceDir, type, filename);
+
+    if (fs.existsSync(maskPath)) {
+      const maskData = fs.readFileSync(maskPath);
+      const base64 = maskData.toString('base64');
+      masksBase64[maskId] = `data:image/webp;base64,${base64}`;
+    }
+  });
+
+  return masksBase64;
+}
+
+// Générer les variables CSS pour les masks avec base64 intégré
+function generateMaskVariables(masksBase64) {
   let css = ':root {\n';
 
-  // Edge masks
-  for (let i = 1; i <= 8; i++) {
-    const key = `000${i}`;
-    if (waterColorMasks.edge[key]) {
-      css += `  --mask-edge-${i}: url('waterColorMasks/edge_${key}.png');\n`;
-    }
-  }
-
-  // Center masks
-  for (let i = 1; i <= 16; i++) {
-    const key = i.toString().padStart(4, '0');
-    if (waterColorMasks.center[key]) {
-      css += `  --mask-center-${i}: url('waterColorMasks/center_${key}.png');\n`;
-    }
-  }
-
-  // Corner masks
-  for (let i = 1; i <= 37; i++) {
-    const key = i.toString().padStart(4, '0');
-    if (waterColorMasks.corner[key]) {
-      css += `  --mask-corner-${i}: url('waterColorMasks/corner_${key}.png');\n`;
-    }
-  }
+  // Masques numérotés utilisés uniquement
+  Object.keys(masksBase64).forEach(maskId => {
+    const [type, num] = maskId.split('/');
+    const varName = `--mask-${type}-${parseInt(num)}`;
+    css += `  ${varName}: url('${masksBase64[maskId]}');\n`;
+  });
 
   css += '}\n';
   return css;
@@ -269,6 +262,9 @@ function fixCSSPaths(css) {
   processedCSS = processedCSS.replace(/url\(['"]?\.\.\/build\/fonts\/([^'"]+)['"]?\)/g, "url('fonts/$1')");
   processedCSS = processedCSS.replace(/url\(['"]?\.\.\/\.\.\/\.\.\/fonts\/([^'"]+)['"]?\)/g, "url('fonts/$1')");
 
+  // Gestion spécifique pour les polices 5e avec ../../../fonts/5e/
+  processedCSS = processedCSS.replace(/url\(['"]?\.\.\/\.\.\/\.\.\/fonts\/5e\/([^'"]+)['"]?\)/g, "url('fonts/$1')");
+
   return processedCSS;
 }
 
@@ -294,9 +290,10 @@ async function downloadExternalImages(html) {
 
     const result = await downloadImage(url, outputPath);
     if (result) {
-      processedHTML = processedHTML.replace(url, outputPath);
+      // Utiliser replaceAll pour remplacer TOUTES les occurrences de l'URL
+      processedHTML = processedHTML.replaceAll(url, outputPath);
       // Remplacer aussi dans --HB_src si présent
-      processedHTML = processedHTML.replace(`--HB_src:url(${url})`, `--HB_src:url('${outputPath}')`);
+      processedHTML = processedHTML.replaceAll(`--HB_src:url(${url})`, `--HB_src:url('${outputPath}')`);
       downloadedCount++;
     }
   }
@@ -322,17 +319,15 @@ console.log(`✓ ${fontsCount} polices copiées`);
 const imagesCount = copyImages();
 console.log(`✓ ${imagesCount} images copiées`);
 
-const masksCount = extractWaterColorMasks();
-console.log(`✓ ${masksCount} waterColorMasks extraits`);
-
 // Charger et traiter les CSS
 console.log('🎨 Traitement des styles...');
 let bundleCSS = fs.readFileSync(path.join(rootDir, 'assets/css/bundle.css'), 'utf8');
 let themeCSS = fs.readFileSync(path.join(rootDir, 'assets/css/themes/V3/5ePHB/style.css'), 'utf8');
-const imageMaskCSS = fs.readFileSync(path.join(rootDir, 'assets/themes/assets/imageMask.css'), 'utf8');
+let imageMaskCSS = fs.readFileSync(path.join(rootDir, 'assets/themes/assets/imageMask.css'), 'utf8');
 
 bundleCSS = fixCSSPaths(bundleCSS);
 themeCSS = fixCSSPaths(themeCSS);
+imageMaskCSS = fixCSSPaths(imageMaskCSS);
 
 console.log('✓ Styles traités');
 
@@ -523,6 +518,14 @@ for (let index = 0; index < pages.length; index++) {
   `;
 }
 
+// Détecter les masques utilisés dans le HTML généré
+const usedMasks = detectUsedMasks(pagesHTML);
+console.log(`🎭 ${usedMasks.size} masque(s) utilisé(s) détecté(s)`);
+
+// Convertir les masques utilisés en base64
+const masksBase64 = getMasksAsBase64(usedMasks);
+console.log(`✓ Masques convertis en base64`);
+
 // HTML complet
 const fullHTML = `<!DOCTYPE html>
 <html>
@@ -536,7 +539,16 @@ const fullHTML = `<!DOCTYPE html>
 
   <style>
     /* Mask Variables */
-    ${generateMaskVariables()}
+    ${generateMaskVariables(masksBase64)}
+
+    /* Mask Classes Mapping - Only numbered masks */
+    ${Object.keys(masksBase64).map(maskId => {
+      const [type, num] = maskId.split('/');
+      const className = type === 'center' ? `imageMaskCenter${parseInt(num)}` :
+                       type === 'edge' ? `imageMaskEdge${parseInt(num)}` :
+                       `imageMaskCorner${parseInt(num)}`;
+      return `.page .${className} { --wc: var(--mask-${type}-${parseInt(num)}); }`;
+    }).join('\n    ')}
 
     /* Fonts */
     ${generateFontFaces()}
@@ -550,7 +562,7 @@ const fullHTML = `<!DOCTYPE html>
     /* ImageMask CSS */
     ${imageMaskCSS}
 
-    /* Styles additionnels */
+    /* Styles additionnels et imageMask personnalisés */
     body {
       margin: 0;
       padding: 0;
@@ -621,37 +633,13 @@ const fullHTML = `<!DOCTYPE html>
       -moz-column-count: 1;
     }
 
-    .page [class*='imageMask'] {
-      position: absolute;
-      z-index: -1;
-      --rotation: 0;
-      --scaleX: 1;
-      --scaleY: 1;
-    }
-
+    /* Styles spéciaux pour insideCover */
     .page:has(.insideCover) [class*='imageMask'] {
       z-index: 0;
     }
 
-    .page [class*='imageMaskCenter'] {
-      bottom: calc(var(--offsetY, 0%));
-      left: calc(var(--offsetX, 0%));
-      width: 100%;
-      height: 100%;
-      transform: rotate(calc(1deg * var(--rotation, 0))) scaleX(var(--scaleX, 1)) scaleY(var(--scaleY, 1));
-    }
-
-    .page [class*='imageMaskCenter'] > p:has(img) {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      transform: scaleX(calc(1 / var(--scaleX, 1))) scaleY(calc(1 / var(--scaleY, 1))) rotate(calc(-1deg * var(--rotation, 0))) translateX(calc(-1 * var(--offsetX, 0%))) translateY(calc(1 * var(--offsetY, 0%)));
-    }
-
-    .page [class*='imageMaskCenter'] img {
-      display: block;
+    .page.has-insideCover [class*='imageMask'] {
+      z-index: 0;
     }
 
     .page h1, .page h2, .page h3, .page h4, .page h5, .page h6 {
